@@ -1437,6 +1437,47 @@ def find_surface_via_scl(num_auts, num_words_per_aut, aut_len, word_len, chain_t
     return possible_surfaces
 
 
+def contains_all_gens(w, rank=2):
+  if rank==2:
+    return w.count('a') > 0 and w.count('A') > 0 and w.count('b') > 0 and w.count('B') > 0
+  else:
+    return False
+
+
+def fraction_that_satisfy(L, gens, test):
+  W = all_words_of_len(L, gens)
+  count = 0
+  for w in W:
+    if test(w):
+      count += 1
+  return count*1.0/len(W)
+
+
+
+def matching_data(len1, len2):
+  part1 = partitions_restricted(len1-4, range(len1-3), 5)
+  part2 = partitions_restricted(len2-4, range(len2-3), 5)
+  GS = {}
+  for p1 in part1:
+    arrange1 = arrangements(part1, 5)
+    for p2 in part2:
+      arrange2 = arrangements(part2, 5)
+      for a1 in arrange1:
+        for a2 in arrange2:
+          compute_gluing_stats(a1, a2, GS)
+          
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
