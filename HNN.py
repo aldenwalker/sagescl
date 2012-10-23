@@ -1444,6 +1444,24 @@ def contains_all_gens(w, rank=2):
     return False
 
 
+def contains_aA(w):
+  L = len(w)
+  first_a = -1
+  for i in xrange(L):
+    if w[i] == 'a':
+      first_a = i
+      break
+  if first_a == -1:
+    return False
+  last_A = -1
+  for i in xrange(L-1, -1, -1):
+    if w[i] == 'A':
+      last_A = i
+      break
+  if last_A == -1 or last_A < first_a:
+    return False
+  return True
+
 def fraction_that_satisfy(L, gens, test):
   W = all_words_of_len(L, gens)
   count = 0
@@ -1451,8 +1469,6 @@ def fraction_that_satisfy(L, gens, test):
     if test(w):
       count += 1
   return count*1.0/len(W)
-
-
 
 def matching_data(len1, len2):
   part1 = partitions_restricted(len1-4, range(len1-3), 5)
