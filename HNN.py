@@ -1462,13 +1462,22 @@ def contains_aA(w):
     return False
   return True
 
-def fraction_that_satisfy(L, gens, test):
-  W = all_words_of_len(L, gens)
-  count = 0
-  for w in W:
-    if test(w):
-      count += 1
-  return count*1.0/len(W)
+def fraction_that_satisfy(L, rank, test, trials=None):
+  if trials == None:
+    W = all_words_of_len(L, list(alphabet[:rank]))
+    count = 0
+    for w in W:
+      if test(w):
+        count += 1
+    return count*1.0/len(W) 
+  else:
+    count = 0
+    for i in xrange(trials):
+      w = random_reduced_word(L, rank)
+      if test(w):
+        count += 1
+    return count*1.0/trials
+  
 
 def matching_data(len1, len2):
   part1 = partitions_restricted(len1-4, range(len1-3), 5)
@@ -1484,7 +1493,30 @@ def matching_data(len1, len2):
           
 
 
+def triples_match(t1, t2):
+  return t1[1] == t2[1].swapcase() and t1[0] != t2[2].swapcase() and t1[2] != t2[0].swapcase()
 
+def matches_all_triples(w, matching_data=None):
+  triples = all_words_of_len(3, ['a','b'])
+  matched = dict( zip( triples, len(triples)*[0]) )
+  s = 0
+  target = len(matched)
+  if matching_data == None:
+    matching_data = {}
+    for t in triples:
+      matching_data[t] = []
+      for t2 in triples: 
+        if triples_match(t, t2):
+          matching_data[t].append(t2)
+  
+  for i in xrange(len(w)-2):
+    t = w[i:i+3]
+    for tm in matching_data[t]:
+      if matched[tm] == 0:
+        matched[tm] = 1
+        s += 1
+  
+  return s == target
 
 
 
