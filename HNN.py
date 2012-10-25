@@ -1519,10 +1519,118 @@ def matches_all_triples(w, matching_data=None):
   return s == target
 
 
+def triple_word_stats(L, trials):
+  good_count = 0
+  both_sides_good_count = 0
+  bad_count = 0
+  matching_data = None
+  tL = 2*L+1
+  for i in xrange(trials):
+    w = random_reduced_word(2*L+1)
+    if matches_all_triples(w, matching_data):
+      good_count += 1
+      if matches_all_triples(w[:L], matching_data) and \
+         matches_all_triples(w[-L:], matching_data):
+        both_sides_good_count += 1
+    else:
+      bad_count += 1
+  
+  print "Fraction good: ", good_count*1.0/trials
+  print "Fraction really good: ", both_sides_good_count*1.0/trials
+  print "Fraction bad: ", bad_count*1.0/trials
+  print "After pairing, probability of segment:"
+  print "Good but not really good (not paired): ", (good_count - both_sides_good_count)*1.0/trials
+  print "Really good, not paired: ", (both_sides_good_count - bad_count)*1.0/trials
+  print "Paired: ", 2*bad_count*1.0/trials
 
 
+def random_good_not_really_good_word(L, matching_data):
+  while True:
+    w = random_reduced_word(2*L+1)
+    if matches_all_triples(w, matching_data):
+      if not matches_all_triples(w[:L], matching_data) or \
+         not matches_all_triples(w[-L:], matching_data):
+        return w
 
+def random_really_good_word(L, matching_data):
+  while True:
+    w = random_reduced_word(2*L+1)
+    if matches_all_triples(w[:L], matching_data) and \
+       matches_all_triples(w[-L:], matching_data)
+      return w
 
+def random_bad_word(L, matching_data):
+  while True:
+    w = random_reduced_word(2*L+1):
+      if not matches_all_triples(w, matching_data):
+        return w
+
+def random_paired(L, matching_data):
+  first_is_good = ( RAND.random() < 0.5 )
+  really_good_word = random_really_good_word(L, matching_data)
+  bad_word = random_bad_word(L, matching_data)
+  while not triples_match(really_good_word[L-1:L+2], bad_word[L-1:L+2]):
+    bad_word = random_bad_word(L, matching_data)
+  if first_is_good:
+    return ( (really_good_word, bad_word), (True, False) )
+  else :
+    return ( (bad_word, really_good_word), (False, True) )
+
+def make_tagged_word(w1, w2, loc1, loc2):
+  return (w1[:loc1], (w1[loc1], w2[loc2]), w2[loc2+1:])
+
+def select_word_from_probs(L, good, really_good, paired):
+  r = RAND.random()
+  if r < good:
+    return [random_good_not_really_good_word(L, matching_data)]
+  elif r < good + really_good:
+    return [random_really_good_word(L, matching_data)]
+  elif:
+    p = random_paired(L, matching_data)
+    return make_tagged_word(p[0][0], p[0][1], L, L)
+
+def triple_gluing_stats(L, good, really_good, paired, trials):
+  middle_len = floor(L/2)-1
+  for i in xrange(trials):
+    #create the four words
+    bottom = ['','']
+    top = ['','']
+    bottom[0] = select_word_from_probs(L, good, really_good, paired)
+    last_letter = bottom[0][-1][-1]
+    while True:
+      bottom[1] = select_word_from_probs(L, good, really_good, paired)
+      first_letter = bottom[1][0][0]
+      if first_letter != last_letter.swapcase():
+        break
+    top[0] = select_word_from_probs(L, good, really_good, paired)
+    last_letter = top[0][-1][-1]
+    while True:
+      top[1] = select_word_from_probs(L, good, really_good, paired)
+      first_letter = top[1][0][0]
+      if first_letter != last_letter.swapcase():
+        break
+    
+    bottom = bottom[0] + bottom[1] # join them
+    top = top[0] + top[1]
+    
+    #now pair the words recursively
+    #pair the beginning and the end, and recurse
+    W = pinch_off_ends(bottom, top)
+    
+    first_len += len(W)
+    
+    W2 = W
+    while True:
+      p = pinch(W2)
+      if len(p) = 1:
+        #just one
+      else:
+        W1, W2 = p
+        
+    
+    
+    
+    
 
 
 
