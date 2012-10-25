@@ -1579,7 +1579,7 @@ def random_paired(L, matching_data):
 def make_tagged_word(w1, w2, loc1, loc2):
   return (w1[:loc1], (w1[loc1], w2[loc2]), w2[loc2+1:])
 
-def select_word_from_probs(L, good, really_good, paired):
+def select_word_from_probs(L, good, really_good, paired, matching_data):
   r = RAND.random()
   if r < good:
     return [random_good_not_really_good_word(L, matching_data)]
@@ -1589,23 +1589,55 @@ def select_word_from_probs(L, good, really_good, paired):
     p = random_paired(L, matching_data)
     return make_tagged_word(p[0][0], p[0][1], L, L)
 
+def first_matching_triples(w1, w2):
+  n = 0
+  scan_len = min(len(w1), len(w2))-2
+  while n < scan_len:
+    for i in xrange(n):
+      for j in xrange(n):
+        if triples_match(tw1[i:i+3], tw2[-1-j:-4-j:-1]):
+          return (i,j)
+  return None
+
+#pair the beginning of tw1 with the *end* of tw2
+def pinch_off_ends(tw1, tw2, matching_data):
+  ditted_tw1 = ''.join([(w if type(w) == str else '.') for w in tw1])
+  ditted_tw2 = ''.join([(w if type(w) == str else '.') for w in tw2])
+  I = first_matching_triple(ditted_tw1, ditted_tw2)
+  if I == None:
+    return None
+  word_ind_1 =  
+  
+#pinch off a tagged word (starting from the beginning)
+#and return both words
+def pinch(tw, matching_data):
+  
+
 def triple_gluing_stats(L, good, really_good, paired, trials):
+  
+  matching_data = None
+  
+  #these record the data about the words we create
+  num_created = 0
+  total_len = 0
+  first_len = 0
+  
   middle_len = floor(L/2)-1
   for i in xrange(trials):
     #create the four words
     bottom = ['','']
     top = ['','']
-    bottom[0] = select_word_from_probs(L, good, really_good, paired)
+    bottom[0] = select_word_from_probs(L, good, really_good, paired, matching_data)
     last_letter = bottom[0][-1][-1]
     while True:
-      bottom[1] = select_word_from_probs(L, good, really_good, paired)
+      bottom[1] = select_word_from_probs(L, good, really_good, paired, matching_data)
       first_letter = bottom[1][0][0]
       if first_letter != last_letter.swapcase():
         break
-    top[0] = select_word_from_probs(L, good, really_good, paired)
+    top[0] = select_word_from_probs(L, good, really_good, paired, matching_data)
     last_letter = top[0][-1][-1]
     while True:
-      top[1] = select_word_from_probs(L, good, really_good, paired)
+      top[1] = select_word_from_probs(L, good, really_good, paired, matching_data)
       first_letter = top[1][0][0]
       if first_letter != last_letter.swapcase():
         break
@@ -1615,22 +1647,25 @@ def triple_gluing_stats(L, good, really_good, paired, trials):
     
     #now pair the words recursively
     #pair the beginning and the end, and recurse
-    W = pinch_off_ends(bottom, top)
+    W = pinch_off_ends(bottom, top, matching_data)
     
     first_len += len(W)
     
     W2 = W
     while True:
-      p = pinch(W2)
+      p = pinch(W2, matching_data)
       if len(p) = 1:
-        #just one
+        num_created += 1
+        total_len += tagged_len(p[0])
+        break
       else:
         W1, W2 = p
-        
-    
-    
-    
-    
+        num_created += 1
+        total_len += tagged_len(p[0]
+  
+  print "Total number of words created: ", num_created
+  print "Average length: ", total_len*1.0/num_created
+  print "Average first length: ", first_len*1.0/trials
 
 
 
