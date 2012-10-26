@@ -9,10 +9,10 @@ from HNN import min_in_orbit
 
 WDIR = './'
 FNULL = open('/dev/null', 'w')
-SCALLOPDIR = '/home/awalker/Documents/research/software/scallop/'
-TROLLOPDIR = '/home/awalker/Documents/research/software/trollop/'
-SCABBLEDIR = '/home/awalker/Documents/research/software/scabble/'
-GALLOPDIR = '/home/awalker/Documents/research/software/gallop/'
+SCALLOPDIR = '/home/akwalker/Documents/software/scallop/'
+TROLLOPDIR = '/home/akwalker/Documents/software/trollop/'
+SCABBLEDIR = '/home/akwalker/Documents/software/scabble/'
+GALLOPDIR = '/home/akwalker/Documents/software/gallop/'
 
 def scl(C_input, scylla=None, scylla_i=False):
   gens =  list(set( (''.join(C_input)).lower() ))

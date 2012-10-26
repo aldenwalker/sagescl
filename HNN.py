@@ -1494,6 +1494,8 @@ def matching_data(len1, len2):
 
 
 def triples_match(t1, t2):
+  if '.' in t1 or '.' in t2:
+    return False
   return t1[1] == t2[1].swapcase() and t1[0] != t2[2].swapcase() and t1[2] != t2[0].swapcase()
 
 def matches_all_triples(w, matching_data=None):
@@ -1556,14 +1558,14 @@ def random_really_good_word(L, matching_data):
   while True:
     w = random_reduced_word(2*L+1)
     if matches_all_triples(w[:L], matching_data) and \
-       matches_all_triples(w[-L:], matching_data)
+       matches_all_triples(w[-L:], matching_data):
       return w
 
 def random_bad_word(L, matching_data):
   while True:
-    w = random_reduced_word(2*L+1):
-      if not matches_all_triples(w, matching_data):
-        return w
+    w = random_reduced_word(2*L+1)
+    if not matches_all_triples(w, matching_data):
+      return w
 
 def random_paired(L, matching_data):
   first_is_good = ( RAND.random() < 0.5 )
@@ -1577,15 +1579,15 @@ def random_paired(L, matching_data):
     return ( (bad_word, really_good_word), (False, True) )
 
 def make_tagged_word(w1, w2, loc1, loc2):
-  return (w1[:loc1], (w1[loc1], w2[loc2]), w2[loc2+1:])
+  return w1[:loc1] + '.' + w1[loc1] + w2[loc2] + '.' + w2[loc2+1:]
 
 def select_word_from_probs(L, good, really_good, paired, matching_data):
   r = RAND.random()
   if r < good:
-    return [random_good_not_really_good_word(L, matching_data)]
+    return random_good_not_really_good_word(L, matching_data)
   elif r < good + really_good:
-    return [random_really_good_word(L, matching_data)]
-  elif:
+    return random_really_good_word(L, matching_data)
+  else:
     p = random_paired(L, matching_data)
     return make_tagged_word(p[0][0], p[0][1], L, L)
 
@@ -1595,23 +1597,50 @@ def first_matching_triples(w1, w2):
   while n < scan_len:
     for i in xrange(n):
       for j in xrange(n):
-        if triples_match(tw1[i:i+3], tw2[-1-j:-4-j:-1]):
-          return (i,j)
+        if triples_match(w1[i:i+3], w2[-4-j:-1-j]):
+          return (i,-4-j+len(w2))
+    n += 1
   return None
 
 #pair the beginning of tw1 with the *end* of tw2
-def pinch_off_ends(tw1, tw2, matching_data):
-  ditted_tw1 = ''.join([(w if type(w) == str else '.') for w in tw1])
-  ditted_tw2 = ''.join([(w if type(w) == str else '.') for w in tw2])
-  I = first_matching_triple(ditted_tw1, ditted_tw2)
+def pinch_off_ends(tw1, tw2):
+  #print "Pinching off ends from: ", tw1, tw2
+  I = first_matching_triples(tw1, tw2)
+  #print "Found index: ", I
   if I == None:
     return None
-  word_ind_1 =  
+  word_ind_1, word_ind_2 = I
+  word_ind_1 += 1
+  word_ind_2 += 1
+  t1 = make_tagged_word(tw1, tw2, word_ind_1, word_ind_2)
+  #print "First word: ", t1
+  W = make_tagged_word(tw2, tw1, word_ind_2, word_ind_1)
+  t2, W = pinch(W)
+  return t1, W, t2
+  
   
 #pinch off a tagged word (starting from the beginning)
 #and return both words
-def pinch(tw, matching_data):
+def pinch(tw):
+  L = floor(len(tw)/2)
+  while L < len(tw) and (tw[L] == tw[L+1].swapcase() or tw[L] == tw[L-1].swapcase() or tw[L]=='.'):
+    L+=1
+  w1 = tw[:L]
+  w2 = tw[L:]
+  I = first_matching_triples(w1, w2)
+  #print "Pinching off ", w1, w2
+  if I == None:
+    return [tw]
+  else:
+    i1 = I[0] + 1
+    i2 = I[1] + 1
+    return (w1[:i1] + '.' + w1[i1] + w2[i2] + '.' + w2[i2+1:], \
+            w2[:i2] + '.' + w2[i2] + w1[i1] + '.' + w1[i1+1:])
   
+
+def tagged_len(w):
+  nt = w.count('.')/2
+  return len(w) - 3*nt
 
 def triple_gluing_stats(L, good, really_good, paired, trials):
   
@@ -1621,6 +1650,10 @@ def triple_gluing_stats(L, good, really_good, paired, trials):
   num_created = 0
   total_len = 0
   first_len = 0
+  tag_len = 0
+  
+  circles_dict = {}
+  tags_dict = {}
   
   middle_len = floor(L/2)-1
   for i in xrange(trials):
@@ -1628,45 +1661,72 @@ def triple_gluing_stats(L, good, really_good, paired, trials):
     bottom = ['','']
     top = ['','']
     bottom[0] = select_word_from_probs(L, good, really_good, paired, matching_data)
-    last_letter = bottom[0][-1][-1]
+    last_letter = bottom[0][-1]
     while True:
       bottom[1] = select_word_from_probs(L, good, really_good, paired, matching_data)
-      first_letter = bottom[1][0][0]
+      first_letter = bottom[1][0]
       if first_letter != last_letter.swapcase():
         break
     top[0] = select_word_from_probs(L, good, really_good, paired, matching_data)
-    last_letter = top[0][-1][-1]
+    last_letter = top[0][-1]
     while True:
       top[1] = select_word_from_probs(L, good, really_good, paired, matching_data)
-      first_letter = top[1][0][0]
+      first_letter = top[1][0]
       if first_letter != last_letter.swapcase():
         break
+    
+    #print "Four words produced: "
+    #print bottom, top
     
     bottom = bottom[0] + bottom[1] # join them
     top = top[0] + top[1]
     
+    #print "Words: ", bottom, top
+    
     #now pair the words recursively
     #pair the beginning and the end, and recurse
-    W = pinch_off_ends(bottom, top, matching_data)
-    
-    first_len += len(W)
+    t1, W, t2 = pinch_off_ends(bottom, top)
+    #print "Pinched: ", t1, W, t2
+    TL1 = tagged_len(t1)
+    TL2 = tagged_len(t2)
+    tag_len += TL1 + TL2
+    tags_dict[TL1] = tags_dict.get(TL1, 0) + 1
+    tags_dict[TL2] = tags_dict.get(TL2, 0) + 1
+    first_len += tagged_len(W)
+    #print "t1 has tagged len: ", tagged_len(t1)
     
     W2 = W
     while True:
-      p = pinch(W2, matching_data)
-      if len(p) = 1:
+      p = pinch(W2)
+      #print "After pinching: ", p
+      if len(p) == 1:
         num_created += 1
-        total_len += tagged_len(p[0])
+        TLp = tagged_len(p[0])
+        circles_dict[TLp] = circles_dict.get(TLp, 0) + 1
+        total_len += TLp
         break
       else:
         W1, W2 = p
         num_created += 1
-        total_len += tagged_len(p[0]
+        TLw = tagged_len(W1)
+        total_len += TLw
+        circles_dict[TLw] = circles_dict.get(TLw,0) + 1
   
   print "Total number of words created: ", num_created
   print "Average length: ", total_len*1.0/num_created
-  print "Average first length: ", first_len*1.0/trials
-
+  print "Average first/last tag lengths: ", tag_len*1.0/(2*trials)  
+  
+  total_tags = sum(tags_dict.values())
+  total_circles = sum(circles_dict.values())
+  
+  for t in tags_dict:
+    tags_dict[t] = tags_dict[t]*1.0/total_tags
+  for c in circles_dict:
+    circles_dict[c] = circles_dict[c]*1.0/total_circles
+  
+  print "Fraction of words which are tags: "
+  print "Tags length distribution: ", tags_dict
+  print "Circles length distribution: ", circles_dict
 
 
 
