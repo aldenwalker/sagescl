@@ -220,6 +220,10 @@ def gallop(graph_filename,
     C = [C_in]
   else:
     C = C_in
+  #if type(weights_in) == int:
+  #  weights = [weights_in]
+  #if weights != None:
+  #  C = [str(weights[i]) + C[i] for i in xrange(len(C))]
   run_string = ['gallop']
   if folded:
     run_string.append('-f')

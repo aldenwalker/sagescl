@@ -193,6 +193,38 @@ def all_words_of_len(n, gens):
       words.extend(newWords)
   return words[oldLen:] 
   
+def all_once_tagged_loops_of_len(n, gens):
+  allGens = gens + [x.swapcase() for x in gens if x.swapcase() not in gens]
+  words = [g for g in allGens]
+  new_words = []
+  for w in words:
+    for g in allGens:
+      if g != w[-1].swapcase():
+        new_words.append(w + '/' + g + g.swapcase() + '/')
+  words = new_words
+  new_words = []
+  for w in words:
+    for g in allGens:
+      if g != w[-2].swapcase() and g != w[0].swapcase():
+        new_words.append(w + g)
+  words = new_words
+  
+  oldLen = 0
+  for iters in xrange(n-3):
+    startIndex = oldLen
+    oldLen = len(words)
+    for i in xrange(startIndex, oldLen):
+      newWords = [words[i] + x for x in allGens if words[i][-1] != x.swapcase()]
+      words.extend(newWords)
+  words = [w for w in words[oldLen:] if w[0] != w[-1].swapcase()]
+  return words
+  
+def vector_to_chain(v, word_list):
+  c = []
+  for i in xrange(len(v)):
+    if v[i] != 0:
+      c.append(str(v[i]) + word_list[i])
+  return c
   
 def random_reduced_word(n, rank=2):
   if rank == 2:

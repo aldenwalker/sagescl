@@ -21,6 +21,13 @@ alphabet = list('abcdefghijklmnopqrstuvwxyz')
 def lcm(a,b):
   return (a*b)/fractions.gcd(a,b)
   
+def integerize_fractions_sage(L):
+  denoms = [x.denominator() for x in L]
+  g = reduce(lcm, denoms)
+  cleared = [int(g*x) for x in L]
+  g = reduce(fractions.gcd, cleared)
+  return [x/g for x in cleared]
+  
 def integerize_fractions(L):
   denoms = [x.denominator for x in L]
   g = reduce(lcm, denoms)
