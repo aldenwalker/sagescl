@@ -17,6 +17,27 @@ import fatgraph
 
 alphabet = list('abcdefghijklmnopqrstuvwxyz')
 
+def cont_frac(x, nterms):
+  L = []
+  X = x
+  for i in xrange(nterms):
+    L.append(floor(X))
+    d = math.modf(X)[0]
+    if abs(d) < 0.0000000000001:
+      return L
+    X = 1/d
+  return L
+
+
+
+def approx_rat(x, tol=0.00000000001):
+  L = cont_frac(x, 20)
+  L_frac = convergents(L)
+  for i in xrange(len(L_frac)):
+    if abs(L_frac[i]-x) < tol:
+      return L_frac[i]
+  return None
+
 
 def lcm(a,b):
   return (a*b)/fractions.gcd(a,b)
@@ -1734,6 +1755,169 @@ def triple_gluing_stats(L, good, really_good, paired, trials):
   print "Fraction of words which are tags: "
   print "Tags length distribution: ", tags_dict
   print "Circles length distribution: ", circles_dict
+
+
+
+#write out the transpose of V to the LP matrix, and put X on the RHS
+def member_of_convex_cone(X, V, s="GLPK", interior=False):
+  p = MixedIntegerLinearProgram(maximization=False, solver=s)
+  #p.solver_parameter("simplex_or_intopt", "simplex_only")
+  #p.solver_parameter("presolve_simplex", "GLP_ON")
+  w = p.new_variable(real=True)
+  for i in xrange(len(V[0])):
+    new_eqn = 0
+    nontrivial_eqn = False
+    for j in xrange(len(V)):
+      if V[j][i] != 0:
+        nontrivial_eqn = True
+        new_eqn += V[j][i]*w[j]
+    if nontrivial_eqn:
+      p.add_constraint(new_eqn == X[i])
+  p.set_objective(0*w[0])
+  if interior:
+    for i in xrange(len(V)):
+      p.set_min(w[i], 0.00001)
+  try:
+    soln = p.solve()
+    return True
+  except:
+    return False
+
+
+def find_nbhd_of_uniform_tagged(L):
+  W = all_once_tagged_loops_of_len(L, ['a','b'])
+  dim = len(W)
+  hom_counts = [[w.count(g) - w.count(inverse(g)) for w in W] for g in ['a','b']]
+  #go through and find a lot of small-density homologically trivial collections
+  #small density means total length less than 40
+  small_density_number = floor(60/L)
+  if small_density_number*(L-1) % 2 != 0:
+    small_density_number += 1
+  print "Choosing small density collections of size", small_density_number
+  #we expect to need something like len(W) of them to span
+  good_vectors = []
+  num_to_add = floor(1.2*dim)
+  while True:
+    for i in xrange(num_to_add):
+      print "Trying to find new collection number", i
+      while True: #try to find a good vector
+        while True: #try to find a homologically trivial vector
+          vec = [0 for j in xrange(dim)]
+          vec_hom_counts = [0,0]
+          for j in xrange(small_density_number):
+            ind = RAND.randint(0, dim-1)
+            vec[ind] += 1
+            vec_hom_counts[0] += hom_counts[0][ind]
+            vec_hom_counts[1] += hom_counts[1][ind]
+          if vec_hom_counts == [0,0]:
+            break
+        #now we've got a homologically trivial vector; test if it bounds a folded surface
+        word_vec = vector_to_chain(vec, W)
+        if gallop('rose2.fg', word_vec, folded=True, only_check_exists=True):
+          print "Found the good homologically trivial collection: ", ' '.join(word_vec)
+          good_vectors.append(vec)
+          break
+    
+    print "We have found ", len(good_vectors), " collections."
+    print "Testing if the uniform vector is in the cone"
+    if member_of_convex_cone([1 for i in xrange(dim)], good_vectors, s="Gurobi"):
+      print "Yes; success"
+      return good_vectors
+      break
+    print "No; failure"
+    if len(good_vectors) > 1000000:
+      print "Too many good vectors; bailing out"
+      break
+    num_to_add = floor(0.2*dim)
+    print "Trying again; adding ", num_to_add, " collections"
+  
+
+
+
+
+def find_nbhd_of_uniform_tagged_fixed_portion(L, rank=2, num_to_fix=0):
+  gens = list(alphabet[:rank])
+  fixed_words = all_words_of_len(num_to_fix, gens)
+  done_words = []
+  good_collections = {}
+  for f in fixed_words:
+    if f in done_words:
+      continue
+    print "Doing fixed word", f
+    done_words.extend([f,inverse(f)])
+    W = all_once_tagged_loop_extensions(f, L, gens)
+    dim = len(W)
+    hom_counts = [[w.count(g) - w.count(inverse(g)) for w in W] for g in gens]
+    #go through and find a lot of small-density homologically trivial collections
+    #small density means total length less than something arbitrary
+    small_density_number = floor(60/L)
+    if small_density_number*(L-1) % 2 != 0:
+      small_density_number += 1
+    print "Choosing small density collections of size", small_density_number
+    #we expect to need something like len(W) of them to span
+    good_vectors = []
+    num_to_add = floor(1.2*dim)
+    success = False
+    while True:
+      for i in xrange(num_to_add):
+        print "Trying to find new collection number", i
+        while True: #try to find a good vector
+          while True: #try to find a homologically trivial vector
+            vec = [0 for j in xrange(dim)]
+            vec_hom_counts = [0,0]
+            for j in xrange(small_density_number):
+              ind = RAND.randint(0, dim-1)
+              vec[ind] += 1
+              vec_hom_counts[0] += hom_counts[0][ind]
+              vec_hom_counts[1] += hom_counts[1][ind]
+            if vec_hom_counts == [0,0]:
+              break
+          #now we've got a homologically trivial vector; test if it bounds a folded surface
+          word_vec = vector_to_chain(vec, W)
+          print "Trying chain", word_vec
+          if gallop('rose' + str(rank) + '.fg', word_vec, folded=True, only_check_exists=True):
+            print "Found the good homologically trivial collection: ", ' '.join(word_vec)
+            good_vectors.append(vec)
+            break
+      
+      print "We have found ", len(good_vectors), " collections."
+      print "Testing if the uniform vector is in the cone"
+      if member_of_convex_cone([1 for i in xrange(dim)], good_vectors, s="Gurobi"):
+        print "Yes; success"
+        success = True
+        break
+      print "No; failure"
+      if len(good_vectors) > 1000000:
+        print "Too many good vectors; bailing out"
+        break
+      num_to_add = floor(0.2*dim)
+      print "Trying again; adding ", num_to_add, " collections"
+    if success:
+      good_collections[f] = (W, good_vectors)
+    else:
+      print "We failed to find a collection for word", f
+      return {}
+    
+  return good_collections
+  
+  
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -182,6 +182,8 @@ def all_words_of_len_le(n, gens):
   return words
 
 def all_words_of_len(n, gens):
+  if n==0:
+    return ['']
   allGens = gens + [x.swapcase() for x in gens if x.swapcase() not in gens]
   words = [''] + allGens
   oldLen = 1
@@ -218,6 +220,39 @@ def all_once_tagged_loops_of_len(n, gens):
       words.extend(newWords)
   words = [w for w in words[oldLen:] if w[0] != w[-1].swapcase()]
   return words
+  
+def all_once_tagged_loop_extensions(f, L, gens):
+  if len(f) == 0:
+    return all_once_tagged_loops_of_len(L, gens)
+  allGens = gens + [x.swapcase() for x in gens if x.swapcase() not in gens]
+  words = [f + g for g in allGens if g != f[-1].swapcase()]
+  new_words = []
+  for w in words:
+    for g in allGens:
+      if g != w[-1].swapcase():
+        new_words.append(w + '/' + g + g.swapcase() + '/')
+  words = new_words
+  new_words = []
+  for w in words:
+    for g in allGens:
+      if g != w[-2].swapcase() and g != w[0].swapcase():
+        new_words.append(w + g)
+  words = new_words
+  
+  oldLen = 0
+  while len(words[-1]) < L:
+    startIndex = oldLen
+    oldLen = len(words)
+    for i in xrange(startIndex, oldLen):
+      newWords = [words[i] + x for x in allGens if words[i][-1] != x.swapcase()]
+      words.extend(newWords)
+  words = [w for w in words[oldLen:] if w[0] != w[-1].swapcase()]
+  return words
+  
+  
+  
+  
+  
   
 def vector_to_chain(v, word_list):
   c = []
