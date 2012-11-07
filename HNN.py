@@ -891,30 +891,33 @@ def check_all_HNN_extensions_for_ffolded(rank, word_len):
   found_one = False
   good_list = []
   bad_list = []
+  torus_list = []
   for t in T:
     targets = [W[i] for i in t]
     if stupid_endomorphism(targets):
       continue
     ns_endo_count += 1
     A = morph( dict( [(alphabet[i], targets[i]) for i in xrange(rank)]) )
-    CL = [random_hom_triv_word(6) for i in xrange(4)]
+    CL = [[random_hom_triv_word(6)] for i in xrange(4)]
     print "Trying ", A
     found_one = False
     for C in CL:
       if is_inverse_chain(C, inverse(A.ap(C))):
         print "torus"
-        continue
+        found_one = True
+        torus_list.append( (A,C) )
+        break
       CC = C + inverse(A.ap(C,marked=True), marked=True)
       print "With chain: ", C, ", ", CC
-      if gallop('rose' + rank + '.fg', CC, only_check_exists=True, folded=True, ffolded=True):
+      if gallop('rose' + str(rank) + '.fg', CC, only_check_exists=True, folded=True, ffolded=True):
         print "It's good!"
         ffolded_count += 1
-        good_list.append( (A,v,C) )
+        good_list.append( (A,C) )
         found_one = True
         break
-      else:
-        print "No good"
-        bad_list.append( (A,v,C) )
+    if not found_one:
+      print "No good"
+      bad_list.append( A )
   
 
 def check_one_HNN_extension_for_ffolded(A, trials, word_len, use_fixed=True, use_hom_triv=False):
