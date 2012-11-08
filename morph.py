@@ -163,6 +163,8 @@ class morph:
         continue
       w = self.rules[g]
       Lw = len(w)
+      if Lw == 0:
+        return False
       max_left_cancel = 0
       for g2 in self.rules:
         if g2.swapcase() == g:
@@ -170,6 +172,8 @@ class morph:
         w2 = self.rules[g2]
         i=0
         Lw2 = len(w2)
+        if Lw2 == 0:
+          return False
         while w2[-(i+1)].swapcase() == w[i]:
           i += 1
           if i >= Lw:
@@ -184,6 +188,8 @@ class morph:
           continue
         w2 = self.rules[g2]
         Lw2 = len(w2)
+        if Lw2 == 0:
+          return False
         i=0
         while w[-(i+1)] == w2[i].swapcase():
           i += 1

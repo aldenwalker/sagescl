@@ -57,11 +57,22 @@ def clean_markings(w):
     return w
   else:
     return w[i-1:]
-    
-def cyc_red(w):
+
+def cyc_red(w, marked=False):
   if type(w) == list:
-    return [cyc_red(x) for x in w]
+    return [cyc_red(x, marked) for x in w]
   LW = len(w)
+  if marked:
+    if len(w) == 0:
+      return w
+    if len(w) == 1:
+      if w == '.':
+        return ''
+      else:
+        return w
+    if w[0] == '.':
+      return '.' + cyc_red(w[1:], True)
+    
   if len(w) == 0 or len(w) == 1:
     return w
   else:
@@ -108,7 +119,7 @@ def is_inverse_chain(C1_in, C2_in):
   
 def power_reduce(w):
   Lw = len(w)
-  for potential_period in xrange(1, len(w)):
+  for potential_period in xrange(1, len(w)+1):
     if Lw%potential_period != 0:
       continue
     p = Lw/potential_period

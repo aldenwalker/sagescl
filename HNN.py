@@ -618,6 +618,9 @@ def stupid_endomorphism(targets):
     
   if any([cyc_red(targets[k]).lower() == alphabet[k] for k in xrange(len(targets))]):
     return True
+  
+  if any([power_reduce(targets[k])[0].lower() == alphabet[k] for k in xrange(len(targets))]):
+    return True
 
   return False
   
@@ -882,10 +885,13 @@ def check_HNN_extensions_for_ffolded(rank, word_len):
         
 
   
-def check_all_HNN_extensions_for_ffolded(rank, word_len):
-  W = all_words_of_len_le(word_len, alphabet[:rank])
+def check_all_HNN_extensions_for_ffolded(rank, word_len, endos=None):
+  W = all_words_of_len(word_len, alphabet[:rank])
   LW = len(W)
-  T = tuples_gen([LW for i in xrange(rank)]) 
+  if endos == None:
+    T = tuples_gen([LW for i in xrange(rank)]) 
+  else:
+    T = endos
   ns_endo_count = 0
   ffolded_count = 0
   found_one = False
@@ -893,12 +899,17 @@ def check_all_HNN_extensions_for_ffolded(rank, word_len):
   bad_list = []
   torus_list = []
   for t in T:
-    targets = [W[i] for i in t]
-    if stupid_endomorphism(targets):
-      continue
+    if endos==None:
+      targets = [W[i] for i in t]
+      if stupid_endomorphism(targets):
+        continue
+      A = morph( dict( [(alphabet[i], targets[i]) for i in xrange(rank)]) )
+      if not A.is_expanding():
+        continue
+    else:
+      A = t
     ns_endo_count += 1
-    A = morph( dict( [(alphabet[i], targets[i]) for i in xrange(rank)]) )
-    CL = [[random_hom_triv_word(6)] for i in xrange(4)]
+    CL = [[random_hom_triv_word(4)] for i in xrange(2)]
     print "Trying ", A
     found_one = False
     for C in CL:
@@ -907,7 +918,8 @@ def check_all_HNN_extensions_for_ffolded(rank, word_len):
         found_one = True
         torus_list.append( (A,C) )
         break
-      CC = C + inverse(A.ap(C,marked=True), marked=True)
+      CC = C + inverse(A.iterate(4).ap(C,marked=True), marked=True)
+      CC = cyc_red(CC, marked=True)
       print "With chain: ", C, ", ", CC
       if gallop('rose' + str(rank) + '.fg', CC, only_check_exists=True, folded=True, ffolded=True):
         print "It's good!"
@@ -918,6 +930,7 @@ def check_all_HNN_extensions_for_ffolded(rank, word_len):
     if not found_one:
       print "No good"
       bad_list.append( A )
+  return (ns_endo_count, torus_list, good_list, bad_list)
   
 
 def check_one_HNN_extension_for_ffolded(A, trials, word_len, use_fixed=True, use_hom_triv=False):
