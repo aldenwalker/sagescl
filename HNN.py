@@ -537,7 +537,7 @@ def WAgen(rank):
       yield whiteheadAut(rank, A, a)
 
 # assumes rank of whatever it finds
-def min_in_orbit(c, R=None):
+def min_in_orbit(c, R=None, m=False):
   #make a copy of c
   if isinstance(c, str):
     C = [c]
@@ -545,12 +545,7 @@ def min_in_orbit(c, R=None):
     C = [x for x in c]
     
   if R == None:
-    rank = 0
-    for w in C:
-      for let in w:
-        ind = alphabet.index(let.lower())
-        if ind+1 > rank:
-          rank = ind+1
+    rank = chain_rank(c)
   else:
     rank = R
   
@@ -561,7 +556,7 @@ def min_in_orbit(c, R=None):
     WA = WAgen(rank)
     gotBetter = False
     for W in WA:
-      newC = W.ap(C)
+      newC = W.ap(C, marked=m)
       newLen = sum(map(len,newC))
       if newLen < Clen:
         C = newC
@@ -884,8 +879,21 @@ def check_HNN_extensions_for_ffolded(rank, word_len):
   return (ns_endo_count, ns_expanding_fixed_count, ffolded_count, good_list, bad_list)
         
 
+#find a random place to glue which glues up a lot of the words involved
+#returns a tagged chain
+def random_folding(C):
+  pass
   
-def check_all_HNN_extensions_for_ffolded(rank, word_len, endos=None):
+
+
+
+
+
+
+
+
+def check_all_HNN_extensions_for_ffolded(rank, word_len, power=1, endos=None, chains_to_try=None, time_limit=0):
+  TL = time_limit
   W = all_words_of_len(word_len, alphabet[:rank])
   LW = len(W)
   if endos == None:
@@ -909,7 +917,10 @@ def check_all_HNN_extensions_for_ffolded(rank, word_len, endos=None):
     else:
       A = t
     ns_endo_count += 1
-    CL = [[random_hom_triv_word(4)] for i in xrange(2)]
+    if chains_to_try == None:
+      CL = [[random_hom_triv_cyc_red_word(8)] for i in xrange(4)]
+    else:
+      CL = chains_to_try #[['abAB'],['BA','a','b']]
     print "Trying ", A
     found_one = False
     for C in CL:
@@ -918,10 +929,10 @@ def check_all_HNN_extensions_for_ffolded(rank, word_len, endos=None):
         found_one = True
         torus_list.append( (A,C) )
         break
-      CC = C + inverse(A.iterate(4).ap(C,marked=True), marked=True)
+      CC = C + inverse(A.iterate(power).ap(C,marked=True), marked=True)
       CC = cyc_red(CC, marked=True)
       print "With chain: ", C, ", ", CC
-      if gallop('rose' + str(rank) + '.fg', CC, only_check_exists=True, folded=True, ffolded=True):
+      if gallop('rose' + str(rank) + '.fg', CC, only_check_exists=True, folded=True, ffolded=len(C), solver="gurobi", time_limit=TL):
         print "It's good!"
         ffolded_count += 1
         good_list.append( (A,C) )
@@ -948,7 +959,7 @@ def check_one_HNN_extension_for_ffolded(A, trials, word_len, use_fixed=True, use
     C = [w, inverse(A.ap(w, marked=True), marked=True)]
     print "Trying vector ", fs[ind], " with chain: ", C
     sys.stdout.flush()
-    if gallop('rose' + str(rank) + '.fg', C, only_check_exists=True, folded=True, ffolded=True):
+    if gallop('rose' + str(rank) + '.fg', C, only_check_exists=True, folded=True, ffolded=1, solver='gurobi'):
       print "It's good!"
       return w
 

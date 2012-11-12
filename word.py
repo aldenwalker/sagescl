@@ -487,9 +487,9 @@ def subword_vector_to_chain(v, word_list):
   return complete_paths
         
   
-def is_hom_triv(C_in):
+def is_hom_triv(C_in, rank=None):
   C = ([C_in] if type(C_in)==str else C_in)
-  r = chain_rank(C)
+  r = (rank if rank != None else chain_rank(C))
   for let in alphabet[:r]:
     countl = sum([w.count(let) for w in C])
     countu = sum([w.count(let.swapcase()) for w in C])
@@ -540,13 +540,19 @@ def random_hom_triv_cyc_red_word(n, rank=2):
     w = random_hom_triv_word(n,rank)
   return w
 
+def random_cyc_red_word(n, rank=2):
+  w = random_reduced_word(n, rank)
+  while w[0] == w[-1].swapcase():
+    w = random_reduced_word(n, rank)
+  return w
+
   
   
 def random_hom_triv_chain(n, maxWords, rank=2):
   wordLens = []
   s = 0
   for i in xrange(maxWords-1):
-    wordLens.append(2*random.randint(1,int(n/2)))
+    wordLens.append(RAND.randint(1,int(n)))
     s += wordLens[-1]
     if s > n:
       wordLens[-1] -= s-n
@@ -555,11 +561,15 @@ def random_hom_triv_chain(n, maxWords, rank=2):
       break
   if s<n:
     wordLens.append(n-s)
-  #print wordLens
-  words = [cyc_red(random_reduced_word(x)) for x in wordLens]
-  while sum([w.count('a') for w in words]) != sum([w.count('A') for w in words]) \
-        or sum([w.count('b') for w in words]) != sum([w.count('B') for w in words]):
-    words = [cyc_red(random_reduced_word(x)) for x in wordLens]
+  print wordLens
+  words = [random_cyc_red_word(x, rank) for x in wordLens]
+  i=0
+  while not is_hom_triv(words) and i<5:
+    words = [random_cyc_red_word(x, rank) for x in wordLens]
+    i+=1
+  if not is_hom_triv(words):
+    while not is_hom_triv(words):
+      words = [cyc_red(random_reduced_word(x, rank)) for x in wordLens]
   
   return words
   

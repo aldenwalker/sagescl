@@ -40,7 +40,7 @@ class morph:
       for i in xrange(n):
         lets = list(ans)
         if marked:
-          ans = multiply_words_marked([self.rules[let] for let in lets])
+          ans = multiply_words_marked([(self.rules[let] if let != '.' else '.') for let in lets])
         else :
           ans = multiply_words([self.rules[let] for let in lets])
       return ans
@@ -205,6 +205,30 @@ class morph:
 
 
   
+def are_symmetric(A,B):
+  switch = morph({'a':'b','b':'a'})
+  inva = morph({'a':'a','b':'b'})
+  invb = morph({'a':'a','b':'b'})
+  SB = switch*B*switch
+  if A == SB:
+    return True
+  if A == inva*B*invb or A == inva*SB*inva:
+    return True
+  if A == invb*B*invb or A == invb*SB*invb:
+    return True
+  if A == inva*invb*B*invb*inva or A == inva*invb*SB*invb*inva:
+    return True
+  
+def reduce_aut_list(L):
+  classes = []
+  for A in L:
+    found = False
+    for C in classes:
+      if are_symmetric(A, C):
+        found = True
+    if not found:
+      classes.append(A)
+  return classes
 
 
 def random_automorphism(rank, n=None):

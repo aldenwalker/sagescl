@@ -213,9 +213,11 @@ def extremal_surface(chain, weights_in=None):
 def gallop(graph_filename, 
            C_in, 
            folded=False, 
-           ffolded=False, 
+           ffolded=None, 
            only_check_exists=False,
-           trivalent=False):
+           trivalent=False,
+           time_limit=0,
+           solver="GLPK"):
   if type(C_in) == str:
     C = [C_in]
   else:
@@ -227,12 +229,20 @@ def gallop(graph_filename,
   run_string = ['gallop']
   if folded:
     run_string.append('-f')
-  if ffolded:
-    run_string.append('-ff')
+  if ffolded != None:
+    if ffolded == True:
+      run_string.append('-ff')
+    else:
+      run_string.append('-ff' + str(ffolded))
   if only_check_exists:
     run_string.append('-e')
   if trivalent:
     run_string.append('-t')
+  if solver != 'GLPK':
+    if time_limit != 0:
+      run_string.append('-G' + str(time_limit))
+    else:
+      run_string.append('-G')
   run_string.append(graph_filename)
   run_string += C
   if sys.version[:3] == '2.7':
