@@ -879,16 +879,185 @@ def check_HNN_extensions_for_ffolded(rank, word_len):
   return (ns_endo_count, ns_expanding_fixed_count, ffolded_count, good_list, bad_list)
         
 
-#find a random place to glue which glues up a lot of the words involved
-#returns a tagged chain
-def random_folding(C):
-  pass
+def random_index_weighted_by_size(L):
+  total_len = sum(map(len, L))
+  r = RAND.random()
+  s = len(L[0])*1.0/total_len
+  i = 0
+  while s < r:
+    i += 1
+    s += len(L[i])*1.0/total_len
+  return i
+    
+
+#given an index, adjust it so that it's not on a tag
+def move_off_tag(w, i, direction):
+  Lw = len(w)
+  if direction == 'forward':
+    if w[i] == '/':
+      if w[(i+1)%Lw] == w[(i+2)%Lw].swapcase():
+        return (i+4)%len(w)
+      else:
+        return (i+1)%Lw
+    elif w[i] == w[(i+1)%Lw].swapcase():
+      return (i+3)%Lw
+    elif w[i] == w[(i-1)%Lw].swapcase():
+      return (i+2)%len(w)
+  else:
+    if w[i] == '/':
+      if w[(i+1)%Lw] == w[(i+2)%Lw].swapcase():
+        return (i-1)%len(w)
+      else:
+        return (i-4)%Lw
+    elif w[i] == w[(i+1)%Lw].swapcase():
+      return (i-2)%Lw
+    elif w[i] == w[(i-1)%Lw].swapcase():
+      return (i-3)%len(w)
+  return i
+
+#extend a matching as far as possible
+#if folded, it'll return a zero length matching if it results in 
+#a nonfolded surface
+#also, if the folding ends right on a tag, it'll return zero length
+#rather than a multi-tagged surface
+def extend_matching(w1, i1_in, w2, i2_in, folded=False):
+  if w1[i1_in] != w2[i2_in].swapcase():
+    return (i1_in, 0, i2_in, 0, 0)
+  L1 = 1
+  L2 = 1
+  Lw1 = len(w1)
+  Lw2 = len(w2)
+  i1 = i1_in
+  i2 = i2_in
+  total_match_len = 1
+  #extend forward
+  while True:
+    tag1 = None
+    if w1[(i1+L1)%Lw1] == '/':
+      tag1 = w1[(i1+L1+1)%Lw1]
+      L1 += 4
+    tag2 = None
+    if w2[(i2-1)%Lw2] == '/':
+      tag2 = w2[(i2-3)%Lw2]
+      i2 = (i2-4)%Lw2
+      L2 += 4
+    if w1[(i1+L1)%Lw1] == '.':
+      L1 += 1
+    if w2[(i2-1)%Lw2] == '.':
+      i2 = (i2-1)%Lw2
+      
+    if w1[(i1+L1)%Lw1] != w2[(i2-1)%Lw2].swapcase():
+      break
+    if folded and tag1 != None and tag2 != None and tag1 == tag2:
+      break
+    total_match_len += 1
+    L1 += 1
+    i2 = (i2-1)%Lw2
+    L2 += 1
+    if L1 > Lw1 or L2 > Lw2:
+      return (i1_in, 0, i2_in, 0, 0)
+  #if we stopped right on a tag, don't use it
+  #or if we stopped right by a mark
+  if w1[(i1+L1-1)%Lw1] == '/' or w2[i2] == '/':
+    return (i1_in, 0, i2_in, 0, 0)
+  if w1[(i1+L1-1)%Lw1] == '.' or w2[(i2)%Lw2] == '.':
+    return (i1_in, 0, i2_in, 0, 0)
   
+  #print "Extended backwards to ", i1, L1, i2, L2
+  
+  #extend backward
+  while True:
+    tag1 = None
+    if w1[(i1-1)%Lw1] == '/':
+      tag1 = w1[(i1-3)%Lw1]
+      i1 = (i1-4)%Lw1
+      L1 += 4
+    tag2 = None
+    if w2[(i2+L2)%Lw2] == '/':
+      tag2 = w2[(i2+L2+1)%Lw2]
+      L2 += 4
+    if w1[(i1-1)%Lw1] =='.':
+      i1 = (i1-1)%Lw1
+    if w2[(i2+L2)%Lw2] == '.':
+      L2 += 1
+    if w1[(i1-1)%Lw1] != w2[(i2+L2)%Lw2].swapcase():
+      break
+    if folded and tag1 != None and tag2 != None and tag1 == tag2:
+      break
+    total_match_len += 1
+    i1 = (i1-1)%Lw1
+    L1 += 1
+    L2 += 1
+    if L1 > Lw1 or L2 > Lw2:
+      return (i1_in, 0, i2_in, 0, 0)
+  #if we stopped right on a tag, don't use it
+  if w1[i1] == '/' or w2[(i2+L2-1)%Lw2] == '/':
+    return (i1_in, 0, i2_in, 0, 0)
+  if w1[(i1)%Lw1] == '.' or w2[(i2+L2-1)%Lw2] == '.':
+    return (i1_in, 0, i2_in, 0, 0)
+  
+  
+  return (i1, L1, i2, L2, total_match_len) 
+
+
+#produce the chain which is obtained by gluing the specified words
+def glue_tagged_chain(C, w1, i1, L1, w2, i2, L2):
+  if w1 == w2:
+    L = len(C[w1])
+    #it's the same word
+    first_loop = cyclic_subword_between_indices(C[w1],(i1+L1)%L, i2)
+    tw1 = '/' + C[w1][i2] + C[w1][(i1+L2-1)%L] + '/' + first_loop
+    second_loop = cyclic_subword_between_indices(C[w1],(i2+L2)%L, i1)
+    tw2 = '/' + C[w1][i1] + C[w1][(i2+L2-1)%L] + '/' + second_loop
+    return [tw1, tw2]
+  else:
+    Lw1 = len(C[w1])
+    Lw2 = len(C[w2])
+    #it's two different words
+    return \
+    ['/' + C[w2][i2] + C[w1][(i1+L1-1)%Lw1] + '/' + \
+    cyclic_subword_between_indices(C[w1], (i1+L1)%Lw1, i1) + \
+    '/' + C[w1][i1] + C[w2][(i2+L2-1)%Lw2] + '/' + \
+    cyclic_subword_between_indices(C[w2], (i2+L2)%Lw2, i2)]
 
 
 
-
-
+#find a random place to glue which glues up a lot of the letters involved
+#returns a tagged chain
+def random_folding(C_in):
+  C = sorted([w for w in C_in], key=len, reverse=True)
+  word1 = random_index_weighted_by_size(C)
+  while len(C[word1]) < 10:
+    word1 = random_index_weighted_by_size(C)
+  word2 = random_index_weighted_by_size(C)
+  while len(C[word2]) < 10:
+    word2 = random_index_weighted_by_size(C)
+  best_gluing_length = 0
+  best_gluing_indices = None
+  #print "Chose words ", word1, word2, C[word1], C[word2]
+  for i in xrange(tagged_len(C_in)):
+    ind1 = RAND.randint(0, len(C[word1])-1)
+    ind2 = RAND.randint(0, len(C[word2])-1)
+    ind1 = move_off_tag(C[word1], ind1, 'forward')
+    if C[word1][ind1] == '.':
+      ind1 += 1
+    ind2 = move_off_tag(C[word2], ind2, 'backward')   
+    if C[word2][ind2] == '.':
+      ind2 += 1
+    #print "Trying matching", ind1, ind2
+    (i1, l1, i2, l2, untagged_len) = extend_matching(C[word1], ind1, C[word2], ind2, folded=True)
+    #print "Found possible matching ", (i1, l1, i2, l2, untagged_len)
+    if untagged_len > best_gluing_length:
+      best_gluing_length = untagged_len
+      best_gluing_indices = (i1, l1, i2, l2)
+  # pair them
+  if best_gluing_indices == None:
+    return C
+  ind1, len1, ind2, len2 = best_gluing_indices
+  #print "Using matching ", (ind1, len1, ind2, len2)
+  new_part = glue_tagged_chain(C, word1, ind1, len1, word2, ind2, len2)
+  return [C[i] for i in xrange(len(C)) if i not in (word1,word2)] + new_part
+  
 
 
 
@@ -929,8 +1098,21 @@ def check_all_HNN_extensions_for_ffolded(rank, word_len, power=1, endos=None, ch
         found_one = True
         torus_list.append( (A,C) )
         break
-      CC = C + inverse(A.iterate(power).ap(C,marked=True), marked=True)
-      CC = cyc_red(CC, marked=True)
+      IM = inverse(A.iterate(power).ap(C,marked=True), marked=True)
+      IM = cyc_red(IM, marked=True)
+      #print "Chain image: ", IM
+      size = tagged_len(IM)
+      print "chain image size ", size
+      while True:
+        old_size = size
+        IM = random_folding(IM)
+        size = tagged_len(IM)
+        if old_size - size < 10:
+          break
+        #print IM
+      #print "Folded: ", IM
+      print "Reduced to size ", tagged_len(IM)
+      CC = C + IM
       print "With chain: ", C, ", ", CC
       if gallop('rose' + str(rank) + '.fg', CC, only_check_exists=True, folded=True, ffolded=len(C), solver="gurobi", time_limit=TL):
         print "It's good!"
@@ -1694,7 +1876,9 @@ def pinch(tw):
   
 
 def tagged_len(w):
-  nt = w.count('.')/2
+  if type(w) == list:
+    return sum(map(tagged_len, w))
+  nt = w.count('/')/2
   return len(w) - 3*nt
 
 def triple_gluing_stats(L, good, really_good, paired, trials):

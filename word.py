@@ -88,6 +88,18 @@ def sign(letter):
     return 1
     
 
+#return the subword which is including i1 through, not including, i2
+def cyclic_subword_between_indices(w, i1_in, i2_in):
+  Lw = len(w)
+  i1 = i1_in%Lw
+  i2 = i2_in%Lw
+  ans = ''
+  if i2 < i1:
+    return w[i1:] + w[:i2]
+  else:
+    return w[i1:i2]
+
+
 
 def inverse(w, marked=False):
   if type(w) == str:
