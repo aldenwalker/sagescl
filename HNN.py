@@ -781,10 +781,13 @@ def check_if_homology_is_geometric(A, V, CO_to_check, power_to_check=1):
   return immsersed_traintracks
 
 
-def check_HNN_extensions_for_homology_covers(rank, word_len, index_check, only_check_expanding=False):
-  W = all_words_of_len_le(word_len, alphabet[:rank])
+def check_HNN_extensions_for_homology_covers(rank, word_len, index_check, endos=None, only_check_expanding=False, it=True):
+  W = all_words_of_len(word_len, alphabet[:rank])
   LW = len(W)
-  T = tuples_gen([LW for i in xrange(rank)])
+  if endos == None:
+    T = tuples_gen([LW for i in xrange(rank)])
+  else:
+    T = endos
   all_endos_count = 0
   nonstupid_expanding_count = 0
   trivially_good_count = 0
@@ -792,16 +795,20 @@ def check_HNN_extensions_for_homology_covers(rank, word_len, index_check, only_c
   examples = []
   non_examples = []
   for t in T:
-    targets = [W[i] for i in t]
     all_endos_count += 1
-    if stupid_endomorphism(targets):
-      continue
-    A = morph( dict( [(alphabet[i], targets[i]) for i in xrange(rank)]) )
+    if endos == None:
+      targets = [W[i] for i in t]
+      if stupid_endomorphism(targets):
+        continue
+      A = morph( dict( [(alphabet[i], targets[i]) for i in xrange(rank)]) )
+    else:
+      A = t
     if only_check_expanding and (not A.is_expanding()):
       continue
     nonstupid_expanding_count += 1
     print "Checking ", A, ' ...',
-    subgroups_with_homology = gap_finite_index_subgroups_with_homology(A, index_check, iteratively=True)
+    sys.stdout.flush()
+    subgroups_with_homology = gap_finite_index_subgroups_with_homology(A, index_check, iteratively=it)
     print ' done'
     sys.stdout.flush()
     if len(subgroups_with_homology) > 0:
@@ -945,6 +952,7 @@ def extend_matching(w1, i1_in, w2, i2_in, folded=False):
       L1 += 1
     if w2[(i2-1)%Lw2] == '.':
       i2 = (i2-1)%Lw2
+      L2 += 1
       
     if w1[(i1+L1)%Lw1] != w2[(i2-1)%Lw2].swapcase():
       break
@@ -978,6 +986,7 @@ def extend_matching(w1, i1_in, w2, i2_in, folded=False):
       L2 += 4
     if w1[(i1-1)%Lw1] =='.':
       i1 = (i1-1)%Lw1
+      L1 += 1
     if w2[(i2+L2)%Lw2] == '.':
       L2 += 1
     if w1[(i1-1)%Lw1] != w2[(i2+L2)%Lw2].swapcase():
@@ -996,7 +1005,8 @@ def extend_matching(w1, i1_in, w2, i2_in, folded=False):
   if w1[(i1)%Lw1] == '.' or w2[(i2+L2-1)%Lw2] == '.':
     return (i1_in, 0, i2_in, 0, 0)
   
-  
+  if L1 >= Lw1-1 or L2 >= Lw2-1:
+    return (i1_in, 0, i2_in, 0, 0)
   return (i1, L1, i2, L2, total_match_len) 
 
 
@@ -1006,7 +1016,7 @@ def glue_tagged_chain(C, w1, i1, L1, w2, i2, L2):
     L = len(C[w1])
     #it's the same word
     first_loop = cyclic_subword_between_indices(C[w1],(i1+L1)%L, i2)
-    tw1 = '/' + C[w1][i2] + C[w1][(i1+L2-1)%L] + '/' + first_loop
+    tw1 = '/' + C[w1][i2] + C[w1][(i1+L1-1)%L] + '/' + first_loop
     second_loop = cyclic_subword_between_indices(C[w1],(i2+L2)%L, i1)
     tw2 = '/' + C[w1][i1] + C[w1][(i2+L2-1)%L] + '/' + second_loop
     return [tw1, tw2]
@@ -1026,6 +1036,8 @@ def glue_tagged_chain(C, w1, i1, L1, w2, i2, L2):
 #returns a tagged chain
 def random_folding(C_in):
   C = sorted([w for w in C_in], key=len, reverse=True)
+  if len(C[0]) <= 10:
+    return C
   word1 = random_index_weighted_by_size(C)
   while len(C[word1]) < 10:
     word1 = random_index_weighted_by_size(C)
@@ -1046,6 +1058,10 @@ def random_folding(C_in):
       ind2 += 1
     #print "Trying matching", ind1, ind2
     (i1, l1, i2, l2, untagged_len) = extend_matching(C[word1], ind1, C[word2], ind2, folded=True)
+    if untagged_len > 0 and \
+       (C[word1][i1] != C[word2][(i2+l2-1)%len(C[word2])].swapcase() or \
+       C[word1][(i1+l1-1)%len(C[word1])] != C[word2][i2].swapcase()):
+      return 1/0
     #print "Found possible matching ", (i1, l1, i2, l2, untagged_len)
     if untagged_len > best_gluing_length:
       best_gluing_length = untagged_len
@@ -1056,6 +1072,8 @@ def random_folding(C_in):
   ind1, len1, ind2, len2 = best_gluing_indices
   #print "Using matching ", (ind1, len1, ind2, len2)
   new_part = glue_tagged_chain(C, word1, ind1, len1, word2, ind2, len2)
+  if any(['//' in x or 'A.a' in x or 'a.A' in x for x in new_part]):
+    return 1/0
   return [C[i] for i in xrange(len(C)) if i not in (word1,word2)] + new_part
   
 
@@ -1112,10 +1130,12 @@ def check_all_HNN_extensions_for_ffolded(rank, word_len, power=1, endos=None, ch
         #print IM
       #print "Folded: ", IM
       print "Reduced to size ", tagged_len(IM)
+      if tagged_len(IM) > 400:
+        continue
       CC = C + IM
       print "With chain: ", C, ", ", CC
       if gallop('rose' + str(rank) + '.fg', CC, only_check_exists=True, folded=True, ffolded=len(C), solver="gurobi", time_limit=TL):
-        print "It's good!"
+        print "It's good!\n\n\n"
         ffolded_count += 1
         good_list.append( (A,C) )
         found_one = True
