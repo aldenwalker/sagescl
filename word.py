@@ -87,6 +87,13 @@ def sign(letter):
   else:
     return 1
     
+def cyclic_subword(w, i, L):
+  Lw = len(w)
+  if i+L > Lw:
+    return w[i:] + w[:(i+L)%Lw)]
+  else:
+    return w[i:i+L]
+
 
 #return the subword which is including i1 through, not including, i2
 def cyclic_subword_between_indices(w, i1_in, i2_in):
