@@ -218,7 +218,12 @@ def find_rots_spanning(rank):
   QH = V.quotient(HS)
   target_rank = QH.dimension()
   while True:
-    orders = [''.join(shuffle(lets)) for i in xrange(target_rank)]
+    orders = []
+    for i in xrange(target_rank):
+      lets2 = lets
+      shuffle(lets2)
+      lets2 = ''.join(lets2)
+      orders.append(lets2)
     rots = [CQ(O) for O in orders]
     M = Matrix(QQ, [QH(r.to_vector(W)) for r in rots])
     if M.rank() == target_rank:
@@ -227,11 +232,11 @@ def find_rots_spanning(rank):
 
 def is_S2k_linear(rank):
   V, QH, orders, rots, M = find_rots_spanning(rank)
-  perm1 = ''.join([alphabet[2*i] + alphabet[2*i+1] for i in xrange(rank)])
+  perm1 = ''.join([alphabet[i] + inverse(alphabet[i]) for i in xrange(rank)])
   perm2 = 'Aa' + perm1[2:]
   perm1 = 'bAaB' + perm1[4:]
-  p1 = CO_perm(perm1)
-  p2 = CO_perm(perm2)
+  p1 = CO_Perm(perm1)
+  p2 = CO_Perm(perm2)
   W = CQ.antisym_basis(2, rank)
   all_O = all_cyclic_orders(rank)
   for p in (p1, p2):
