@@ -5,6 +5,10 @@ from word import *
 
 alphabet = list('abcdefghijklmnopqrstuvwxyz')
 
+def all_cyclic_orders(rank):
+  letters = alphabet[:rank] + inverse(alphabet[:rank])
+  P = permutations(letters[1:])
+  return [''.join([letters[0]] + p) for p in P]
 
 def cyclic_order_coefficient(O, a, b, c):
   LO = len(O)
@@ -248,8 +252,9 @@ def is_S2k_linear(rank):
       r2 = CQ(p.ap(O))
       v1 = QH(r1.to_vector(W))
       v2 = QH(r2.to_vector(W))
-      if transition_matrix * v1 != v2:
+      if v1 * transition_matrix != v2:
         print "I think that perm ", p, " doesn't work with rot ", O
+        print 1/0
         return False
   return True
               
