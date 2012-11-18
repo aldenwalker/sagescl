@@ -89,10 +89,15 @@ def sign(letter):
     
 def cyclic_subword(w, i, L):
   Lw = len(w)
-  if i+L > Lw:
-    return w[i:] + w[:(i+L)%Lw)]
+  L_left = L
+  ans = ''
+  while L_left > Lw:
+    ans += w[i:] + w[:i]
+    L_left -= Lw
+  if i+L_left > Lw:
+    return ans + w[i:] + w[:(i+L_left)%Lw]
   else:
-    return w[i:i+L]
+    return w[i:i+L_left]
 
 
 #return the subword which is including i1 through, not including, i2
