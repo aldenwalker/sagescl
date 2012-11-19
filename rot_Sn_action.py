@@ -21,8 +21,56 @@ def cyclic_order_coefficient(O, a, b, c):
     bi += LO
   return bi-ai
 
+def tripod_boundary(t):
+  return [inverse(t[0]) + t[1], inverse(t[1]) + t[2], inverse(t[2]) + t[0]]
+
+def tripods(rank):
+  gens = alphabet[:rank] + inverse(alphabet[:rank])
+  unordered = sage.combinat.subset.Subsets_sk(gens, 3)
+  return [list(t) for t in unordered] + [[t[0], t[2], t[1]] for t in unordered] 
+
+#word_ind_dict should be a dictionary that maps each word to 
+#+/i, where +i if the word lives in index i-1 and -i if the word 
+#lives in i-1 but with negative sign
+def words_to_vector(C, L, word_ind_dict):
+  ans = [0 for i in xrange(L)]
+  for w in C:
+    widw = word_ind_dict[w]
+    if widw < 0:
+      ans[-widw-1] -= 1
+    else:
+      ans[widw-1] += 1
+  return ans
 
 class CQ:
+  @staticmethod
+  def unit_ball_len_2(rank, W_in=None, back='ppl'):
+    if W_in == None:
+      W = CQ.antisym_basis(2, rank)
+    else:
+      W = W_in
+    if rank not in CQ.homs:
+      CQ.compute_rank_homs(2, rank)
+    equalities_list = [[0] + c.to_vector(W) for c in CQ.homs[rank]]
+    T = tripods(rank)
+    word_ind_dict = {}
+    for i in xrange(len(W)):
+      word_ind_dict[W[i]] = i+1
+      word_ind_dict[inverse(W[i])] = -(i+1)
+    ineqs_list = []
+    ambient_dim = len(W)
+    for t in T:
+      bd = tripod_boundary(t)
+      vec = words_to_vector(bd, ambient_dim, word_ind_dict)
+      negvec = [-v for v in vec]
+      ineqs_list.append([1] + negvec)
+    r = (QQ if back=='ppl' or back=='cddr' else RDF)
+    UB = Polyhedron(base_ring=r, ieqs=ineqs_list, eqns=equalities_list, backend=back)
+    return UB
+
+
+
+
   @staticmethod
   def antisym_basis(ell, rank):
     W = all_words_of_len(ell, alphabet[:rank])
