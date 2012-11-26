@@ -68,8 +68,11 @@ class CQ:
     UB = Polyhedron(base_ring=r, ieqs=ineqs_list, eqns=equalities_list, backend=back)
     return UB
 
-
-
+  @staticmethod
+  def from_vector(ell, rank, v, W):
+    d = dict( [ (W[i], v[i]) for i in xrange(len(W))] )
+    return CQ(ell=ell, rank=rank, rules=d)
+    
 
   @staticmethod
   def antisym_basis(ell, rank):
@@ -201,10 +204,10 @@ class CQ:
   #we need to determine if their difference is in the span of the homs
   def __eq__(self, other, W_in=None):
     if self.rank not in CQ.homs:
-      CQ.compute_rank_homs(ell, rank)
+      CQ.compute_rank_homs(self.ell, self.rank)
     dif = -1*other
     dif = self + dif
-    print "Difference is: ", dif
+    #print "Difference is: ", dif
     if W_in == None:
       W = CQ.antisym_basis(self.ell, self.rank)
     else:
@@ -306,8 +309,22 @@ def is_S2k_linear(rank):
         return False
   return True
               
-    
-    
+def rots_convex_hull(rank, br=QQ, back='ppl'):
+  rots = [CQ(O) for O in all_cyclic_orders(rank)]
+  W = CQ.antisym_basis(2, rank)
+  rots_vecs = [r.to_vector(W) for r in rots]
+  if rank not in CQ.homs:
+    CQ.compute_rank_homs(2, rank)
+  H = [h.to_vector(W) for h in CQ.homs[rank]]
+  V = VectorSpace(QQ, len(W))
+  HS = V.subspace(H)
+  QH = V.quotient(HS)
+  rots_quotient = [QH(r) for r in rots_vecs]
+  return Polyhedron(base_ring=br, backend=back, vertices=rots_quotient)
+
+def save_rots_convex_hull(rank, filename, br, back):
+  rots_convex_hull(rank, br, back).save(filename)
+
 
 
 
