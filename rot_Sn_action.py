@@ -24,10 +24,24 @@ def cyclic_order_coefficient(O, a, b, c):
 def tripod_boundary(t):
   return [inverse(t[0]) + t[1], inverse(t[1]) + t[2], inverse(t[2]) + t[0]]
 
-def tripods(rank):
+def tripods(rank, edge_len=1):
   gens = alphabet[:rank] + inverse(alphabet[:rank])
   unordered = sage.combinat.subset.Subsets_sk(gens, 3)
-  return [list(t) for t in unordered] + [[t[0], t[2], t[1]] for t in unordered] 
+  tripods_len_1 = [list(t) for t in unordered] + [[t[0], t[2], t[1]] for t in unordered]
+  if edge_len==1:
+    return tripods_len_1
+  #otherwise, the set of all tripods is all possible
+  #extensions of these tripods of length 1
+  W = all_words_of_len(edge_len, alphabet[:rank])
+  starting_with = dict( [ (g, [w for w in W if w[0]==g]) for g in alphabet[:rank] + inverse(alphabet[:rank])] )
+  tripods_len_ell = []
+  for T in tripods_len_1:
+    word_lists = [ starting_with[T[0]], starting_with[T[1]], starting_with[T[2]] ]
+    word_list_lens = len(word_lists[0]) #they should all have the same length
+    selected = tuples(range(word_list_lens), 3)
+    tripods_len_ell += [ [word_lists[0][s[0]], word_lists[1][s[1]], word_lists[2][s[2]]] for s in selected]
+  return tripods_len_ell
+    
 
 #word_ind_dict should be a dictionary that maps each word to 
 #+/i, where +i if the word lives in index i-1 and -i if the word 
@@ -49,9 +63,9 @@ class CQ:
       W = CQ.antisym_basis(2, rank)
     else:
       W = W_in
-    if rank not in CQ.homs:
+    if (2,rank) not in CQ.homs:
       CQ.compute_rank_homs(2, rank)
-    equalities_list = [[0] + c.to_vector(W) for c in CQ.homs[rank]]
+    equalities_list = [[0] + c.to_vector(W) for c in CQ.homs[(2,rank)]]
     T = tripods(rank)
     word_ind_dict = {}
     for i in xrange(len(W)):
@@ -83,9 +97,9 @@ class CQ:
 
   @staticmethod
   def compute_rank_homs(ell, rank):
-    if rank in CQ.homs:
+    if (ell, rank) in CQ.homs:
       return
-    CQ.homs[rank] = []
+    CQ.homs[(ell, rank)] = []
     W = []
     for i in xrange(ell):
       W.append(all_words_of_len(i, list(alphabet[:rank])))
@@ -101,7 +115,7 @@ class CQ:
               continue
             current_words.append(w1+g+w2)
         d = dict( [(w,1) for w in current_words] )
-        CQ.homs[rank].append(CQ(ell=ell, rank=rank, rules=d))
+        CQ.homs[(ell,rank)].append(CQ(ell=ell, rank=rank, rules=d))
 
   homs = {}
   
@@ -203,7 +217,7 @@ class CQ:
 
   #we need to determine if their difference is in the span of the homs
   def __eq__(self, other, W_in=None):
-    if self.rank not in CQ.homs:
+    if (self.ell, self.rank) not in CQ.homs:
       CQ.compute_rank_homs(self.ell, self.rank)
     dif = -1*other
     dif = self + dif
@@ -212,7 +226,7 @@ class CQ:
       W = CQ.antisym_basis(self.ell, self.rank)
     else:
       W = W_in
-    hom_basis = [c.to_vector(W) for c in CQ.homs[self.rank]]
+    hom_basis = [c.to_vector(W) for c in CQ.homs[(self.ell, self.rank)]]
     my_vector = dif.to_vector(W)
     A = Matrix(QQ, hom_basis)
     #print "Matrix: "
@@ -265,9 +279,9 @@ def find_rots_spanning(rank):
   M = []
   good_rots = []
   W = CQ.antisym_basis(2, rank)
-  if rank not in CQ.homs:
+  if (2,rank) not in CQ.homs:
     CQ.compute_rank_homs(2, rank)
-  hom_basis = [c.to_vector(W) for c in CQ.homs[rank]]
+  hom_basis = [c.to_vector(W) for c in CQ.homs[(2,rank)]]
   V = VectorSpace(QQ, len(W))
   HS = V.subspace([ V(h) for h in hom_basis])
   QH = V.quotient(HS)
@@ -313,9 +327,9 @@ def rots_convex_hull(rank, br=QQ, back='ppl'):
   rots = [CQ(O) for O in all_cyclic_orders(rank)]
   W = CQ.antisym_basis(2, rank)
   rots_vecs = [r.to_vector(W) for r in rots]
-  if rank not in CQ.homs:
+  if (2,rank) not in CQ.homs:
     CQ.compute_rank_homs(2, rank)
-  H = [h.to_vector(W) for h in CQ.homs[rank]]
+  H = [h.to_vector(W) for h in CQ.homs[(2,rank)]]
   V = VectorSpace(QQ, len(W))
   HS = V.subspace(H)
   QH = V.quotient(HS)
