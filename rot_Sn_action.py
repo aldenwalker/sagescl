@@ -21,8 +21,15 @@ def cyclic_order_coefficient(O, a, b, c):
     bi += LO
   return bi-ai
 
-def tripod_boundary(t):
-  return [inverse(t[0]) + t[1], inverse(t[1]) + t[2], inverse(t[2]) + t[0]]
+def tripod_boundary(t, all_boundary_words=None):
+  if all_boundary_words==None:
+    return [inverse(t[0]) + t[1], inverse(t[1]) + t[2], inverse(t[2]) + t[0]]
+  else:
+    all_bds = []
+    for b in [inverse(t[0]) + t[1], inverse(t[1]) + t[2], inverse(t[2]) + t[0]]:
+      for i in xrange(len(b)-all_boundary_words+1):
+        all_bds.append( b[i:i+all_boundary_words] )
+    return all_bds
 
 def tripods(rank, edge_len=1):
   gens = alphabet[:rank] + inverse(alphabet[:rank])
@@ -83,6 +90,34 @@ class CQ:
     return UB
 
   @staticmethod
+  def unit_ball(ell, rank, W_in=None, back='ppl'):
+    if W_in == None:
+      W = CQ.antisym_basis(ell, rank)
+    else:
+      W = W_in
+    if (ell,rank) not in CQ.homs:
+      CQ.compute_rank_homs(ell, rank)
+    hom_equalities_list = [[0] + c.to_vector(W) for c in CQ.homs[(ell,rank)]]
+    if (ell, rank) not in CQ.zero_vectors:
+      CQ.compute_zero_vectors(ell, rank)
+    zero_equalities_list = [[0] + c.to_vector(W) for c in CQ.zero_vectors[(ell,rank)]]
+    T = tripods(rank, ell-1)
+    word_ind_dict = {}
+    for i in xrange(len(W)):
+      word_ind_dict[W[i]] = i+1
+      word_ind_dict[inverse(W[i])] = -(i+1)
+    ineqs_list = []
+    ambient_dim = len(W)
+    for t in T:
+      bd = tripod_boundary(t, all_boundary_words=ell)
+      vec = words_to_vector(bd, ambient_dim, word_ind_dict)
+      negvec = [-v for v in vec]
+      ineqs_list.append([1] + negvec)
+    r = (QQ if back=='ppl' or back=='cddr' else RDF)
+    UB = Polyhedron(base_ring=r, ieqs=ineqs_list, eqns=hom_equalities_list + zero_equalities_list, backend=back)
+    return UB
+
+  @staticmethod
   def from_vector(ell, rank, v, W):
     d = dict( [ (W[i], v[i]) for i in xrange(len(W))] )
     return CQ(ell=ell, rank=rank, rules=d)
@@ -114,10 +149,26 @@ class CQ:
             if len(w2) > 0 and w2[0] == G:
               continue
             current_words.append(w1+g+w2)
+        #print "Current words for ", g, " for i=", i,": ", current_words
         d = dict( [(w,1) for w in current_words] )
         CQ.homs[(ell,rank)].append(CQ(ell=ell, rank=rank, rules=d))
 
+  @staticmethod
+  def compute_zero_vectors(ell, rank):
+    #produces CQs for each word of length ell-1, which is (everything ending with it) - 
+    #(everything beginning with it).  These are zero on all chains
+    CQ.zero_vectors[(ell, rank)] = []
+    Wmo = all_words_of_len(ell-1, alphabet[:rank])
+    gens = alphabet[:rank] + inverse(alphabet[:rank])
+    for w in Wmo:
+      all_beginning = [w + g for g in gens if w[-1] != g.swapcase()]
+      all_ending = [g + w for g in gens if w[0] != g.swapcase()]
+      pairs = [(e,1) for e in all_ending] + [(b,-1) for b in all_beginning]
+      CQ.zero_vectors[(ell,rank)].append( CQ(ell=ell, rank=rank, rules=dict(pairs)) )
+
+
   homs = {}
+  zero_vectors = {}
   
   def __init__(self, order=None, ell=None, rank=None, rules=None):
     if order == None:
@@ -194,6 +245,14 @@ class CQ:
     else:
       print "kind not recognized"
   
+  def increase_ell(self, new_ell):
+    new_rules = []
+    W = all_words_of_len(new_ell-self.ell, alphabet[:self.rank])
+    for w in self.rules:
+      new_rules += [ (w+w2, self.rules[w]) for w2 in W if w2[0] != w[-1].swapcase()] 
+    return CQ(ell=new_ell, rank=self.rank, rules=dict(new_rules))
+    
+
   def add_words(self, d):
     for x in d:
       self.rules[x] = self.rules.get(x,0) + d[x]
