@@ -495,82 +495,6 @@ def to_mathematica(L):
   return str(L).replace('[','{').replace(']','}')
       
 
-class whiteheadAut(morph):
-  def __init__(self, rank, A, a):
-    self.A = A
-    self.a = a
-    self.rules = {}
-    for gen in alphabet[:rank] + map(inverse, alphabet[:rank]):
-      if gen == a or gen == inverse(a):
-        self.rules[gen] = gen
-      elif gen in A and inverse(gen) not in A:
-        self.rules[gen] = gen+a
-      elif gen not in A and inverse(gen) in A:
-        self.rules[gen] = inverse(a)+gen
-      elif gen not in A and inverse(gen) not in A:
-        self.rules[gen] = gen
-      else:
-        self.rules[gen] = inverse(a) + gen + a
-
-
-def WAgen(rank):
-  allGens = alphabet[:rank] + map(inverse, alphabet[:rank])
-  LA = len(allGens)
-  #first give the identity, then never do it again
-  yield whiteheadAut(rank, [], allGens[0])
-  
-  #iterate over the multiplier
-  for a in allGens:
-    #the number of gens possibilities to go into A is 2^(len(allGens)-2)
-    for Anum in xrange(1,2**(LA-2)): #0 would be the identity
-      currentAIndex = 0
-      currentGenIndex = 0
-      A = []
-      while currentGenIndex < LA:
-        if a.lower() == allGens[currentGenIndex].lower():
-          currentGenIndex += 1
-          continue
-        if (Anum >> currentAIndex)&1 == 1:
-          A.append(allGens[currentGenIndex])
-        currentGenIndex += 1
-        currentAIndex += 1
-      yield whiteheadAut(rank, A, a)
-
-# assumes rank of whatever it finds
-def min_in_orbit(c, R=None, m=False):
-  #make a copy of c
-  if isinstance(c, str):
-    C = [c]
-  else:
-    C = [x for x in c]
-    
-  if R == None:
-    rank = chain_rank(c)
-  else:
-    rank = R
-  
-  Clen = sum(map(len, C))
-  
-  #go through all whitehead auts, restarting if we get better
-  while True:
-    WA = WAgen(rank)
-    gotBetter = False
-    for W in WA:
-      newC = W.ap(C, marked=m)
-      newLen = sum(map(len,newC))
-      if newLen < Clen:
-        C = newC
-        Clen = newLen
-        gotBetter = True
-        break
-    if not gotBetter:
-      break
-  
-  if isinstance(c, str):
-    return C[0]
-  else:
-    return C
-
 def gen_tuples(limits):
   return reduce( lambda current, next_limit:                                 \
                     [x + [i] for x in current for i in xrange(next_limit)],  \
@@ -1079,7 +1003,7 @@ def random_folding(C_in):
 
 
 
-def check_all_HNN_extensions_for_ffolded(rank, word_len, power=1, endos=None, chains_to_try=None, time_limit=0):
+def check_all_HNN_extensions_for_ffolded(rank, word_len, power=1, endos=None, chains_to_try=None, time_limit=0, do_folding=False):
   TL = time_limit
   W = all_words_of_len(word_len, alphabet[:rank])
   LW = len(W)
@@ -1121,7 +1045,7 @@ def check_all_HNN_extensions_for_ffolded(rank, word_len, power=1, endos=None, ch
       #print "Chain image: ", IM
       size = tagged_len(IM)
       print "chain image size ", size
-      while True:
+      while do_folding:
         old_size = size
         IM = random_folding(IM)
         size = tagged_len(IM)
@@ -1208,8 +1132,8 @@ def bounds_folded_stats(word_len, rank, trials=None, trivalent=False):
 
 
   
-def find_flat_surfaces(rank, word_len):
-  W = all_words_of_len_le(word_len, alphabet[:rank])
+def find_flat_surfaces(rank, word_len, max_good_power=4):
+  W = all_words_of_len(word_len, alphabet[:rank])
   LW = len(W)
   T = tuples_gen([LW for i in xrange(rank)])
   all_endos_count = 0
@@ -1238,7 +1162,7 @@ def find_flat_surfaces(rank, word_len):
     good_orders = []
     while True:
       good_orders = [c for c in CO if AT.preserves_order(c, good_power)]
-      if len(good_orders)>0 or good_power == 4:
+      if len(good_orders)>0 or good_power == max_good_power:
         break
       else:
         good_power += 1
@@ -1247,13 +1171,13 @@ def find_flat_surfaces(rank, word_len):
     good_power_count += 1
     if good_power > 2:
       continue
-    C = chain_from_vector(v)
+    C = [x for x in chain_from_vector(v) if x != '']
     iC = cyc_red(A.ap(inverse(C), good_power))
     rots = [(c, rot(c, C+iC)) for c in good_orders if rot(c, C+iC) > 0]
     if len(rots) == 0:
       continue
     nontrivial_rots_count += 1
-    s = scl(C+iC, scylla=True, scylla_i=True)
+    s = gallop('rose'+str(rank)+'.fg', C+iC, solver="gurobi")
     print "Trying ", A, " on chain ", C, " with rots ", rots, " and scl=", s
     sys.stdout.flush()
     if any([2*s == x[1] for x in rots]):

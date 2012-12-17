@@ -75,6 +75,24 @@ class morph:
       return False
     else:
       return not any([self.rules[l] != other.rules[l] for l in sk])
+
+  def act_on_tripod(self, T):
+    it = self.ap(T)
+    min_len = min(map(len, it))
+    i = 0
+    while i < min_len and it[0][i] == it[1][i] and it[1][i] == it[2][i]:
+      i += 1
+    it = [w[i:] for w in it]
+    #ensure that if any two things agree, it's 0 and 1
+    if it[1][0] == it[2][0]:
+      it = [it[1], it[2], it[0]]
+    elif it[0][0] == it[2][0]:
+      it = [it[2], it[0], it[1]]
+    min_len = min_len - i
+    i=0
+    while i < min_len and it[0][i] == it[1][i]:
+      i += 1
+    return [it[0][i:], it[1][i:], inverse(it[0][:i]) + it[2]]
     
   def homology_matrix(self):
     rank = len(self.rules)/2
@@ -219,6 +237,15 @@ def are_symmetric(A,B):
   if A == inva*invb*B*invb*inva or A == inva*invb*SB*invb*inva:
     return True
   
+def power_is_reducible(A, n=2):
+  ng = len(A.rules)/2
+  gens = alphabet[:ng]
+  for i in xrange(n):
+    B = A.iterate(i+1)
+    if sorted([power_reduce(cyc_red(B.ap(g)).lower())[0] for g in gens]) == alphabet[:ng]:
+      return True
+  return False
+  
 def reduce_aut_list(L):
   classes = []
   for A in L:
@@ -229,7 +256,6 @@ def reduce_aut_list(L):
     if not found:
       classes.append(A)
   return classes
-
 
 def random_automorphism(rank, n=None):
   gens = alphabet[:rank]
@@ -340,3 +366,82 @@ def homology_matrix(A):
   gens = sorted([x for x in A.rules.keys() if x.islower()])
   rows = [ [ (A.rules[x].count(y) - A.rules[x].count(inverse(y)))  for x in gens] for y in gens]
   return rows
+
+class whiteheadAut(morph):
+  def __init__(self, rank, A, a):
+    self.A = A
+    self.a = a
+    self.rules = {}
+    for gen in alphabet[:rank] + map(inverse, alphabet[:rank]):
+      if gen == a or gen == inverse(a):
+        self.rules[gen] = gen
+      elif gen in A and inverse(gen) not in A:
+        self.rules[gen] = gen+a
+      elif gen not in A and inverse(gen) in A:
+        self.rules[gen] = inverse(a)+gen
+      elif gen not in A and inverse(gen) not in A:
+        self.rules[gen] = gen
+      else:
+        self.rules[gen] = inverse(a) + gen + a
+
+
+def WAgen(rank):
+  allGens = alphabet[:rank] + map(inverse, alphabet[:rank])
+  LA = len(allGens)
+  #first give the identity, then never do it again
+  yield whiteheadAut(rank, [], allGens[0])
+  
+  #iterate over the multiplier
+  for a in allGens:
+    #the number of gens possibilities to go into A is 2^(len(allGens)-2)
+    for Anum in xrange(1,2**(LA-2)): #0 would be the identity
+      currentAIndex = 0
+      currentGenIndex = 0
+      A = []
+      while currentGenIndex < LA:
+        if a.lower() == allGens[currentGenIndex].lower():
+          currentGenIndex += 1
+          continue
+        if (Anum >> currentAIndex)&1 == 1:
+          A.append(allGens[currentGenIndex])
+        currentGenIndex += 1
+        currentAIndex += 1
+      yield whiteheadAut(rank, A, a)
+
+# assumes rank of whatever it finds
+def min_in_orbit(c, R=None, m=False):
+  #make a copy of c
+  if isinstance(c, str):
+    C = [c]
+  else:
+    C = [x for x in c]
+    
+  if R == None:
+    rank = chain_rank(c)
+  else:
+    rank = R
+  
+  Clen = sum(map(len, C))
+  
+  #go through all whitehead auts, restarting if we get better
+  while True:
+    WA = WAgen(rank)
+    gotBetter = False
+    for W in WA:
+      newC = W.ap(C, marked=m)
+      newLen = sum(map(len,newC))
+      if newLen < Clen:
+        C = newC
+        Clen = newLen
+        gotBetter = True
+        break
+    if not gotBetter:
+      break
+  
+  if isinstance(c, str):
+    return C[0]
+  else:
+    return C
+
+
+

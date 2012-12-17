@@ -216,6 +216,7 @@ def gallop(graph_filename,
            ffolded=None, 
            only_check_exists=False,
            trivalent=False,
+           save_file=None,
            time_limit=0,
            solver="GLPK"):
   if type(C_in) == str:
@@ -243,6 +244,9 @@ def gallop(graph_filename,
       run_string.append('-G' + str(time_limit))
     else:
       run_string.append('-G')
+  if save_file != None:
+    run_string.append('-o')
+    run_string.append(save_file)
   run_string.append(graph_filename)
   run_string += C
   if sys.version[:3] == '2.7':
