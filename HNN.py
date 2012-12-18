@@ -5,11 +5,13 @@ import subprocess
 import random as RAND
 import sys
 import os
+import re
 
 from morph import *
 #load('morph.py')
 from scl import *
 from word import *
+from rot_Sn_action import *
 from sage.all import *
 
 import covering
@@ -162,6 +164,8 @@ def rot_power(CO, w_in, TA, n):
   
 
 
+def cyclic_order_boundary(o):
+  return boundary(o)
 
 def boundary(w):
   wl = len(w)
@@ -610,14 +614,63 @@ def to_gap(s):
   sl = list(s)
   sl = [(g if g.islower() else g.lower() + '^-1') for g in sl]
   return '*'.join(sl)
+
+#puts it in gap form, except puts a p after every letter
+def to_gap_prime(s):
+  gf = to_gap(s)
+  return re.sub(r"([a-z])", r"\1p", gf)
+
+def from_gap(s):
+  ss = s.split('*')
+  return ''.join(case_notation_single(w) for w in ss)   
   
+def from_gap_prime(s):
+  return from_gap(s.replace('p',''))
+
+#remove as many t's as possible by killing off twT=A.ap(w)
+def simplify_stable(A, w):
+  t_ind = w.find('t')
+  if t_ind == -1:
+    return w
+  T_ind = w.find('T',t_ind)
+  if T_ind == -1:
+    return w
+  closer_t = w.find('t', t_ind+1, T_ind)
+  while closer_t != -1:
+    t_ind = closer_t
+    closer_t = w.find('t', t_ind+1, T_ind)
+  w_new = multiply_words([ w[:t_ind], A.ap(w[t_ind+1:T_ind]), w[T_ind+1:] ])
+  return simplify_stable(A, w_new) 
   
-  
+#conjugate and stuff to remove instances of t
+#here we take twT = A.ap(w)
+def remove_stable_letter(A, stab, w):
+  t_count = w.count('t') - w.count('T')
+  t_count_stab = stab.count('t') - stab.count('T')
+  if t_count_stab < 0:
+    return 1/0
+  if t_count > 0:
+    new_w = multiply_words([w] + (t_count/t_count_stab)*[inverse(stab)])
+  elif t_count < 0:
+    new_w = multiply_words((-t_count/t_count_stab)*[stab] + [w])
+  else:
+    new_w = w 
+  new_w = simplify_stable(A, new_w)
+  #now we have zero signed t count
+  #but we must conjugate if necessary to remove Txt
+  t_count = new_w.count('t')
+  m = ceil(Integer(t_count)/Integer(t_count_stab))
+  new_w = multiply_words(m*[stab] + [new_w] + m*[inverse(stab)])
+  return simplify_stable(A, new_w)
+    
+
+
 #use gap to find finite index subgroups
-def gap_finite_index_subgroups_with_homology(A, index_bound, iteratively=False):
+def gap_finite_index_subgroups_with_homology(A, index_bound, iteratively=False, find_HNN_structure=False):
   rank = len(A.rules)/2
   gens = alphabet[:rank]
-  relators = [to_gap(multiply_words([inverse(g), 't', A.rules[g], 'T'])) for g in gens]
+  relators = [to_gap(multiply_words([inverse(g), 'T', A.rules[g], 't'])) for g in gens]
+  gap.eval('LoadPackage("fga");')
   gap.eval('F:=FreeGroup(' + ','.join(['"' + g + '"' for g in gens]) + ',"t");')
   gap.eval('AssignGeneratorVariables(F);')
   gap.eval('relators:=[' + ','.join(relators) + '];')
@@ -646,7 +699,113 @@ def gap_finite_index_subgroups_with_homology(A, index_bound, iteratively=False):
         subgroups.append( (i, index, betti2_cover) )
     if len(subgroups) > 0:
       break
-  return subgroups
+  if not find_HNN_structure:
+    return subgroups
+  
+  #find the HNN structure on each group.
+  gap.eval('FS := FreeGroup(' + ','.join(['"' + g + 'p"' for g in gens]) + ');')
+  gap.eval('AssignGeneratorVariables(FS);')
+  subgroups_with_structures = []
+  for S in subgroups:
+    #first, we need to eliminate the t's in all generators except one 
+    #which will be the stable letter
+    ind = S[0]
+    S_gens = gap.eval('GeneratorsOfGroup(subgroups[' + str(ind+1) + ']);')
+    S_gens = [s.replace('[','').replace(']','').strip() for s in S_gens.split(',')]
+    S_gens = [from_gap(s) for s in S_gens]
+    t_counts = [s.count('t')-s.count('T') for s in S_gens]
+    num_gens = len(S_gens)
+    for i in xrange(num_gens):
+      if t_counts[i] < 0:
+        t_counts[i] *= -1
+        S_gens[i] = inverse(S_gens[i])
+    g = gcd(t_counts)
+    if not g in t_counts:
+      print "gcd isn't in there -- error"
+      return 1/0
+    stable_ind = t_counts.index(g)
+    S_gens[stable_ind] = simplify_stable(A, S_gens[stable_ind])
+    ###print ind
+    ###print S_gens
+    ###print t_counts
+    ###print stable_ind
+    for i in xrange(num_gens):
+      if i == stable_ind:
+        continue
+      S_gens[i] = remove_stable_letter(A, S_gens[stable_ind], S_gens[i])
+    ###print S_gens
+    
+    #now we have all the generators
+    #we need to keep htting them with the stable letters until
+    #they stay in the subgroup
+    trivial = False
+    current_gens = [S_gens[i] for i in xrange(num_gens) if i != stable_ind]
+    stab = S_gens[stable_ind]
+    gap_gens = [to_gap_prime(s) for s in current_gens]
+    if '' in gap_gens:
+      trivial = True
+      subgroups_with_structures.append(list(S) + ['trivial'])
+      continue
+    gap.eval('S := Subgroup(FS, [' + ','.join(gap_gens) + ']);')
+    while True:
+      acted_on_gens = [simplify_stable(A, multiply_words([stab, s, inverse(stab)])) for s in current_gens]
+      gap_acted_on_gens = [to_gap_prime(s) for s in acted_on_gens]
+      if '' in gap_acted_on_gens:
+        trivial = True
+        break
+      any_missing = False
+      for i in xrange(len(acted_on_gens)):
+        if not eval(gap.eval(gap_acted_on_gens[i] + ' in S;')):
+          current_gens.append(acted_on_gens[i])
+          gap_gens.append(gap_acted_on_gens[i])
+          any_missing = True
+      if not any_missing:
+        break
+      gap.eval('S := Subgroup(FS, [' + ','.join(gap_gens) + ']);')
+    if trivial:
+      subgroups_with_structures.append(list(S) + ['trivial'])
+      continue
+    ###print current_gens
+    free_S_gens = gap.eval('mgs := MinimalGeneratingSet(S);')
+    ###print free_S_gens
+    free_S_gens = [s.translate(None, '[] \n') for s in free_S_gens.split(',')]
+    free_S_gens = [from_gap_prime(s) for s in free_S_gens]
+    ###print free_S_gens
+    
+    #now we have a list of the complete free generators
+    #we need to figure out the endomorphism
+
+    free_S_gens_targets = [simplify_stable(A, multiply_words([stab, s, inverse(stab)])) for s in free_S_gens]
+    gap_free_S_gens_targets = [to_gap_prime(s) for s in free_S_gens_targets]
+    free_S_rank = len(free_S_gens)
+    gap.eval('H := FreeGroup( ' + str(free_S_rank) + ');')
+    gap.eval('StoH := GroupHomomorphismByImages(S, H, mgs, GeneratorsOfGroup(H));')
+    gap.eval('HtoS := GroupHomomorphismByImages(H, S, GeneratorsOfGroup(H), mgs);')
+    gap.eval('Sphi := GroupHomomorphismByImages(S,S,mgs, [' +','.join(gap_free_S_gens_targets) + ']);')
+    ###print gap.eval('HtoS*Sphi*StoH;')
+    free_S_gens_targets = gap.eval('HtoS*Sphi*StoH;').split('->')[-1]
+    #replace all the f's with letters
+    while True:
+      mo = re.search("f[0-9]+", free_S_gens_targets)
+      if not mo:
+        break
+      val = int(free_S_gens_targets[mo.start()+1:mo.end()])
+      free_S_gens_targets = free_S_gens_targets[:mo.start()] + \
+                            alphabet[val-1] +                  \
+                            free_S_gens_targets[mo.end():]
+    free_S_gens_targets = [s.translate(None, ' \n][') for s in free_S_gens_targets.split(',')]
+    free_S_gens_targets = [from_gap(s) for s in free_S_gens_targets]
+    ###print free_S_gens_targets
+    subgroup_A = morph(dict(zip(alphabet[:free_S_rank], free_S_gens_targets)))
+    subgroups_with_structures.append( list(S[1:]) + [free_S_rank, subgroup_A] )
+
+  return subgroups_with_structures
+    
+
+
+
+    
+                          
   
 
 def finite_index_subgroups_with_homology(A, indexes):
@@ -705,7 +864,7 @@ def check_if_homology_is_geometric(A, V, CO_to_check, power_to_check=1):
   return immsersed_traintracks
 
 
-def check_HNN_extensions_for_homology_covers(rank, word_len, index_check, endos=None, only_check_expanding=False, it=True):
+def check_HNN_extensions_for_homology_covers(rank, word_len, index_check, endos=None, only_check_expanding=False, it=True, find_free_ranks=False):
   W = all_words_of_len(word_len, alphabet[:rank])
   LW = len(W)
   if endos == None:
@@ -732,7 +891,10 @@ def check_HNN_extensions_for_homology_covers(rank, word_len, index_check, endos=
     nonstupid_expanding_count += 1
     print "Checking ", A, ' ...',
     sys.stdout.flush()
-    subgroups_with_homology = gap_finite_index_subgroups_with_homology(A, index_check, iteratively=it)
+    if not find_free_ranks:
+      subgroups_with_homology = gap_finite_index_subgroups_with_homology(A, index_check, iteratively=it)
+    else:
+      subgroups_with_homology = gap_finite_index_subgroups_with_homology(A, index_check, iteratively=it, find_HNN_structure=True)
     print ' done'
     sys.stdout.flush()
     if len(subgroups_with_homology) > 0:
@@ -1130,6 +1292,31 @@ def bounds_folded_stats(word_len, rank, trials=None, trivalent=False):
     
     
 
+#this does not require expanding
+#but it does iterate over orders
+def find_flat_surface(rank, A, Rots=None, Bds=None):
+  V = A.fixed_space()
+  if len(V) == 0:
+    return None
+  CO = cyclic_orders(rank)
+  nCO = len(CO)
+  if Bds == None:
+    bds = [cyclic_order_boundary(O) for O in CO]
+  else:
+    bds = Bds
+  if Rots == None:
+    rots = [CQ(O) for O in CO]
+    rots = [(Integer(1)/r.defect())*r for r in rots] 
+  else:
+    rots = Rots
+  two_bd_scl = rank-1
+  Abds = [cyc_red(A.ap(b)) for b in bds]
+  rot_vals = [rots[i].ap(Abds[i]) for i in xrange(nCO)]
+  good_order_inds = [i for i in xrange(nCO) if rot_vals[i] == two_bd_scl]
+  print good_order_inds
+
+  
+  
 
   
 def find_flat_surfaces(rank, word_len, max_good_power=4):

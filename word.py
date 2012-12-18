@@ -125,6 +125,15 @@ def inverse(w, marked=False):
 def commutator(x,y):
   return multiply_words([x,y,inverse(x), inverse(y)])
 
+def case_notation_single(w):
+  if '^' not in w:
+    return w
+  gen, val = w.split('^')
+  val = int(val)
+  if val > 0:
+    return val*gen
+  else:
+    return (-val)*gen.swapcase()
   
   
 def is_inverse_chain(C1_in, C2_in):
