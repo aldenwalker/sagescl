@@ -238,6 +238,23 @@ def all_words_of_len(n, gens):
       newWords = [words[i] + x for x in allGens if words[i][-1] != x.swapcase()]
       words.extend(newWords)
   return words[oldLen:] 
+
+def all_cyc_red_hom_triv_word_reps_of_len_le(n, gens):
+  W = all_words_of_len_le(n, gens)
+  S = set([least_cyclic_inverse_rep(w) for w in W if is_hom_triv(w) and w != ''])
+  return S
+
+def least_cyclic_rep(w):
+  s = cyc_red(w)
+  least_word = s
+  for i in xrange(len(s)):
+    s2 = s[i:] + s[:i]
+    if s2 < least_word:
+      least_word = s2
+  return least_word
+  
+def least_cyclic_inverse_rep(w):
+  return min( least_cyclic_rep(w), least_cyclic_rep(inverse(w)) )
   
 def all_once_tagged_loops_of_len(n, gens):
   allGens = gens + [x.swapcase() for x in gens if x.swapcase() not in gens]
@@ -642,4 +659,48 @@ def random_chain_with_hom_image(n, rank, max_words, hom_image) :
    
 
 
-  
+def any_equal_pairs(t, inds, signs):
+  lets = [(t[inds[i]] if signs[i] > 0 else inverse(t[inds[i]])) for i in xrange(len(inds))]
+  if lets[0] == lets[1] or lets[0] == lets[2] or lets[1] == lets[2]:
+    return True
+  return False
+
+def all_cubes(initial_edges=None):
+  if initial_edges == None:
+    T = Tuples(['a','b','A','B'],12)
+  else:
+    T = Tuples(['a','b','A','B'],12-len(initial_edges))
+  good_T = []
+  for i in xrange(T.cardinality()):
+    t = initial_edges + T[i]
+    if i%1000 == 0:
+      print '\r' + str(i),
+      sys.stdout.flush()
+    #check all the vertices -- each label goes from 
+    #the lower vertex to the higher one
+    #vert 0: 0, 3, 4
+    if any_equal_pairs(t, (0, 3, 4), (1,1,1) ):
+      continue
+    #vert 1: -0, 1, 5
+    if any_equal_pairs(t, (0,1,5), (-1,1,1) ):
+      continue
+    #vert 2: -1, -2, 6
+    if any_equal_pairs(t, (1,2,6), (-1,-1,1) ):
+      continue
+    #vert 3: 2, -3, 7
+    if any_equal_pairs(t, (2,3,7), (1,-1,1) ):
+      continue
+    #vert 4: -4, 8, 11
+    if any_equal_pairs(t, (4,8,11), (-1,1,1) ):
+      continue
+    #vert 5: -5,9, -8
+    if any_equal_pairs(t, (5,9,8), (-1,1,-1) ):
+      continue
+    #vert 6: -9, -6, -10
+    if any_equal_pairs(t, (9,6,10), (-1,-1,-1) ):
+      continue
+    #vert 7: -7, 10, -11
+    if any_equal_pairs(t, (7,10,11), (-1,1,-1) ):
+      continue
+    good_T.append(t)
+  return good_T

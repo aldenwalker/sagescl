@@ -210,12 +210,12 @@ def extremal_surface(chain, weights_in=None):
   
   
   
-def gallop(graph_filename, 
-           C_in, 
+def gallop(C_in, 
            folded=False, 
            ffolded=None, 
            only_check_exists=False,
            trivalent=False,
+           pSides = None,
            save_file=None,
            time_limit=0,
            solver="GLPK"):
@@ -227,7 +227,7 @@ def gallop(graph_filename,
   #  weights = [weights_in]
   #if weights != None:
   #  C = [str(weights[i]) + C[i] for i in xrange(len(C))]
-  run_string = ['gallop']
+  run_string = ['scallop', '-local']
   if folded:
     run_string.append('-f')
   if ffolded != None:
@@ -237,29 +237,31 @@ def gallop(graph_filename,
       run_string.append('-ff' + str(ffolded))
   if only_check_exists:
     run_string.append('-e')
+  if pSides != None:
+    run_string.append('-p' + str(pSides))
   if trivalent:
     run_string.append('-t')
   if solver != 'GLPK':
     if time_limit != 0:
-      run_string.append('-G' + str(time_limit))
+      run_string.append('-mGUROBI')
+      run_string.append('-t'+ str(time_limit))
     else:
-      run_string.append('-G')
+      run_string.append('-mGUROBI')
   if save_file != None:
     run_string.append('-o')
     run_string.append(save_file)
-  run_string.append(graph_filename)
   run_string += C
   if sys.version[:3] == '2.7':
     mout = subprocess.check_output(run_string,  \
-                                   executable=GALLOPDIR+run_string[0],     \
+                                   executable=SCALLOPDIR+run_string[0],     \
                                    stderr=FNULL,                            \
-                                   cwd=GALLOPDIR)
+                                   cwd=SCALLOPDIR)
   else:
     sca = subprocess.Popen(run_string,  \
-                       executable=GALLOPDIR+run_string[0],         \
+                       executable=SCALLOPDIR+run_string[0],         \
                        stdout=subprocess.PIPE,                  \
                        stderr=FNULL,                            \
-                       cwd=GALLOPDIR)
+                       cwd=SCALLOPDIR)
     mout = sca.communicate()[0]      
   dat = mout.split('\n')
   if only_check_exists:
@@ -269,8 +271,6 @@ def gallop(graph_filename,
       return False
   return fractions.Fraction(dat[0].split(' ')[-3])
   
-
-
 
 
 

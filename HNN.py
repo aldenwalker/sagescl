@@ -591,7 +591,8 @@ def traintrack_matrices_sep_domain(directory, A, n, v=None, filename=''):
   phi = list(A.negative_phi(n, words))
   if v == None:
     v = list(A.fixed_space())[0]
-  hom_matrix = [ [(sign(x[1]) if x[1].lower() == g else 0) for x in words] for g in alphabet[:rank] ]
+  letter_sign = lambda x: (1 if x.islower() else -1)
+  hom_matrix = [ [(letter_sign(x[1]) if x[1].lower() == g else 0) for x in words] for g in alphabet[:rank] ]
   Mfile = directory + '/' + filename + 'M.mat'
   Nfile = directory + '/' + filename + 'N.mat'
   vfile = directory + '/' + filename + 'b.vec'
@@ -1294,26 +1295,90 @@ def bounds_folded_stats(word_len, rank, trials=None, trivalent=False):
 
 #this does not require expanding
 #but it does iterate over orders
-def find_flat_surface(rank, A, Rots=None, Bds=None):
-  V = A.fixed_space()
-  if len(V) == 0:
-    return None
-  CO = cyclic_orders(rank)
-  nCO = len(CO)
-  if Bds == None:
-    bds = [cyclic_order_boundary(O) for O in CO]
+def find_extremal_surfaces(rank, word_len, endos=None, \
+                           check_flat=True, check_counting=True, \
+                           counting_ell=3):
+
+  all_endos_count=0
+  nonstupid_expanding_fix_hom_count = 0
+  extremal_count=0
+  flat_count=0
+  counting_count=0
+  good_endos=[]
+  bad_endos=[]
+  if endos==None:
+    W = all_words_of_len(word_len, alphabet[:rank])
+    LW = len(W)
+    T=tuples_gen([LW for i in xrange(rank)])
+    E = []
+    for t in T:
+      targets = [W[i] for i in t]
+      all_endos_count += 1
+      if stupid_endomorphism(targets):
+        continue
+      A = morph( dict( zip( alphabet[:rank], targets )))
+      if not A.is_expanding() or len(A.fixed_space()) == 0:
+        continue
+      nonstupid_expanding_fix_hom_count += 1
+      E.append(A)
   else:
-    bds = Bds
-  if Rots == None:
+    E = endos
+    all_endos_count = len(E)
+    E = [A for A in E if A.is_expanding() and len(A.fixed_space()) > 0]
+    nonstupid_expanding_fix_hom_count = len(E)
+
+  if check_flat:
+    CO = cyclic_orders(rank)
     rots = [CQ(O) for O in CO]
-    rots = [(Integer(1)/r.defect())*r for r in rots] 
-  else:
-    rots = Rots
-  two_bd_scl = rank-1
-  Abds = [cyc_red(A.ap(b)) for b in bds]
-  rot_vals = [rots[i].ap(Abds[i]) for i in xrange(nCO)]
-  good_order_inds = [i for i in xrange(nCO) if rot_vals[i] == two_bd_scl]
-  print good_order_inds
+    rots = [(Integer(1)/r.defect())*r for r in rots]
+
+  for A in E:
+    v = A.fixed_space()[0]
+    C = [x for x in chain_from_vector(v) if x != '']
+    iC = cyc_red(A.ap(inverse(C)))
+    CC = C + iC
+    print "For ", A, " with C=", C
+    CCscl = gallop('rose'+str(rank)+'.fg', CC, solver="gurobi")
+    CCscl = Rational(str(CCscl))
+    print "scl=", CCscl
+    found_extremal = False
+    good_rots = []
+    good_lower_bound = 0
+    if check_flat:
+      AT = tripod_action(A)
+      preserved_order_inds = [i for i in xrange(len(CO)) if AT.preserves_order(CO[i])]
+      rot_values = [(i, rots[i].ap(CC)) for i in preserved_order_inds]
+      matched_rot_values = [x for x in rot_values if x[1] == 2*CCscl]
+      print "Matched rot values: ", matched_rot_values
+      if len(matched_rot_values) > 0:
+        extremal_count += 1
+        flat_count += 1
+        is_extremal = True
+        good_rots = matched_rot_values
+        print "Good"
+    
+    if check_counting: # and not found_extremal:
+      traintrack_matrices_sep_domain(TROLLOPDIR, A, counting_ell, v)
+      lower_bound = trollop(None, counting_ell, rank=rank, mat_comp=True, sep_domain=True, method='GUROBI')
+      print "Found counting lower bound: ", lower_bound
+      lower_bound = Rational(str(lower_bound))
+      #if lower_bound != CCscl:
+      #  print "I find that ", lower_bound, " and ", CCscl, " arne't equal."
+      if lower_bound == CCscl:
+        if not found_extremal:
+          extremal_count += 1
+          found_extremal = True
+        counting_count += 1
+        good_lower_bound = lower_bound
+        print "Good"
+      
+    if found_extremal:
+      good_endos.append( (A, C, good_rots, good_lower_bound) )
+    else:
+      bad_endos.append( A )
+
+  return (all_endos_count, nonstupid_expanding_fix_hom_count, extremal_count, \
+          flat_count, counting_count, good_endos, bad_endos)
 
   
   
