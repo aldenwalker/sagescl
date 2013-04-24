@@ -21,6 +21,12 @@ def cyclic_order_coefficient(O, a, b, c):
     bi += LO
   return bi-ai
 
+def all_distinct(L):
+  return len(set(L)) == len(L)
+
+def tripod_forms_sphere(t):
+  return all_distinct([t[0][-1], t[1][-1], t[2][-1]])
+
 def tripod_boundary(t, all_boundary_words=None):
   if all_boundary_words==None:
     return [inverse(t[0]) + t[1], inverse(t[1]) + t[2], inverse(t[2]) + t[0]]

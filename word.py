@@ -86,6 +86,16 @@ def sign(letter):
     return -1
   else:
     return 1
+
+def runs(w):
+  wl = w.lower()
+  s = wl.count('ab') + wl.count('ba')
+  if wl[0] != wl[-1]:
+    s += 1
+  return s
+
+  
+
     
 def cyclic_subword(w, i, L):
   Lw = len(w)
@@ -552,10 +562,10 @@ def random_reduced_finite_word(n, orders):
   num_gens = len(orders)
   W = []
   for i in xrange(n):
-    gen = random.randint(0, num_gens-1)
+    gen = RAND.randint(0, num_gens-1)
     while len(W) > 0 and gen == W[-1][0]:
-      gen = random.randint(0, num_gens-1)
-    W.append( ( gen, simplify_finite_gen_power(random.randint(1, orders[gen]-1), orders[gen]) ))
+      gen = RAND.randint(0, num_gens-1)
+    W.append( ( gen, simplify_finite_gen_power(RAND.randint(1, orders[gen]-1), orders[gen]) ))
   #print W
   W = [ (x[-1]*alphabet[x[0]] if x[-1] > 0 else (-x[-1])*inverse(alphabet[x[0]])) for x in W]
   return ''.join(W)

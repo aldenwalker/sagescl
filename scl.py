@@ -14,6 +14,36 @@ TROLLOPDIR = '/home/akwalker/Documents/software/trollop/'
 SCABBLEDIR = '/home/akwalker/Documents/software/scabble/'
 GALLOPDIR = '/home/akwalker/Documents/software/gallop/'
 
+def scylla(gen_string, C_input, method=None):
+  if type(C_input) == str:
+    C = [C_input]
+  else :
+    C = [x for x in C_input if x != '']
+  
+  run_string = ['scallop']
+  if method != None:
+    run_string += ['-m' + method]
+  run_string += [gen_string]
+  run_string += C
+  
+  if sys.version[:3] == '2.7':
+    mout = subprocess.check_output(run_string,  \
+                             executable=SCALLOPDIR+run_string[0],     \
+                             stderr=FNULL,                            \
+                             cwd=SCALLOPDIR)
+  else:
+    sca = subprocess.Popen(run_string,  \
+                       executable=SCALLOPDIR+run_string[0],         \
+                       stdout=subprocess.PIPE,                  \
+                       stderr=FNULL,                            \
+                       cwd=SCALLOPDIR)
+    mout = sca.communicate()[0]
+  dat = mout.split(' ')[-3]
+  return fractions.Fraction(dat)
+
+
+
+
 def scl(C_input, scylla=None, scylla_i=False):
   gens =  list(set( (''.join(C_input)).lower() ))
   
