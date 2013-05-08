@@ -222,6 +222,17 @@ def rot(w, C_in):
   return ans/len(w)
   
   
+def p2_rot(w_in, p, gen_2='b'):
+  if type(w_in) == list:
+    return sum([p2_rot(w,p,gen_2) for w in w_in])
+  gen_1 = ('a' if gen_2=='b' else 'b')
+  w = w_in
+  if w[0] != gen_2:
+    while w[0] != gen_2:
+      w = w[-1] + w[:-1]
+  groups = w.split(gen_2)[1:]
+  return sum([ (1 if g==gen_1 else -1) for g in groups])
+  
   
 def all_words_of_len_le(n, gens):
   allGens = gens + [x.swapcase() for x in gens if x.swapcase() not in gens]
@@ -558,11 +569,14 @@ def is_hom_triv(C_in, rank=None):
   return True
   
     
-def random_reduced_finite_word(n, orders):
+def random_reduced_finite_word(n, orders, first=None):
   num_gens = len(orders)
   W = []
   for i in xrange(n):
-    gen = RAND.randint(0, num_gens-1)
+    if i==0 and first!=None:
+      gen = first
+    else:
+      gen = RAND.randint(0, num_gens-1)
     while len(W) > 0 and gen == W[-1][0]:
       gen = RAND.randint(0, num_gens-1)
     W.append( ( gen, simplify_finite_gen_power(RAND.randint(1, orders[gen]-1), orders[gen]) ))

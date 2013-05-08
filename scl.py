@@ -39,7 +39,7 @@ def scylla(gen_string, C_input, method=None):
                        cwd=SCALLOPDIR)
     mout = sca.communicate()[0]
   dat = mout.split(' ')[-3]
-  return fractions.Fraction(dat)
+  return sage_eval(dat)
 
 
 
