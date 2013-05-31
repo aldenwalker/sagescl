@@ -11,7 +11,9 @@ class Edge:
     return '(' + str(self.source) + '->' + str(self.dest) + ', ' + self.label_forward + ', ' + self.label_backward + ')'
     
   def __repr__(self):
-    return str(self)
+    return 'Edge(' + ','.join(map(str, [self.source, self.dest, self.label_forward, self.label_backward])) + ')'
+  
+class 
   
 class Vertex:
   """a vertex class with ordered edges; note "true" means the edge is leaving"""
@@ -27,6 +29,20 @@ class Vertex:
   def num_edges(self):
     return len(self.edges)
     
+
+def full_fiber_product(F,G):
+  """Returns the fiber product of F and G as a list of connected fatgraphs.
+     There is no meaning to the cyclic orders on the vertices, though (just graphs)"""
+  #create the list of vertices -- just all pairs
+  verts = [(x,y) for y in xrange(len(G.V)) for x in xrange(len(F.V))]
+  verts_indices = dict([ (verts[i], i) for i in xrange(len(verts))])
+  #there is an edge for pair of edges in F and G
+  edges = [(x,y) for y in xrange(len(G.E)) for y in xrange(len(F.V))]
+  E = []
+  V = []
+  #go through the edges and install them
+  for i in xrange(len(edges)):
+    pass
 
 class Fatgraph:
   def __init__(self, verts, edges):
