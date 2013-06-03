@@ -6,6 +6,7 @@ class Edge:
     self.dest = v1
     self.label_forward = Lf
     self.label_backward = Lb
+    self.carries_folded_edges = None
   
   def __str__(self):
     return '(' + str(self.source) + '->' + str(self.dest) + ', ' + self.label_forward + ', ' + self.label_backward + ')'
@@ -19,6 +20,7 @@ class Vertex:
   """a vertex class with ordered edges; note "true" means the edge is leaving"""
   def __init__(self, edge_list, direction_list):
     self.edges = [(e, direction_list[i]==1) for i,e in enumerate(edge_list)]
+    self.carries_folded_verts = None
     
   def __str__(self):
     return str(self.edges)
@@ -29,6 +31,7 @@ class Vertex:
   def num_edges(self):
     return len(self.edges)
     
+
 
 def full_fiber_product(F,G):
   """Returns the fiber product of F and G as a list of connected fatgraphs.
@@ -48,6 +51,8 @@ class Fatgraph:
   def __init__(self, verts, edges):
     self.V = [x for x in verts]
     self.E = [x for x in edges]
+    self.folded_V = None
+    self.folded_E = None
   
   def __repr__(self):
     return 'Fatgraph(' + str(self.V) + ', ' + str(self.E) + ')'
@@ -72,6 +77,34 @@ class Fatgraph:
       else:
         ans.append( self.E[i].label_backward )
     return ans
+  
+  def unfolded_edge_pair(self, v_ind):
+    """returns a pair of edge indices which have the same outgoing label,
+       or None if no such pair exists"""
+    outgoing_labels = {}
+    for i in xrange(len(self.V[v_ind].edges)):
+      edge_ind, edge_dir = self.V[v_ind].edges[i]
+      ol = (self.E[edge_ind].label_forward if edge_dir else self.E[edge_ind].label_backward)
+      if ol in outgoing_labels:
+        return (outgoing_labels[ol], i)
+      outgoing_labels[ol] = i
+    return None
+  
+  def fold(self): 
+    """returns the folded version of the fatgraph, with the folded structure"""
+    #initialize the new folded fatgraph
+    
+    
+    
+    #find an unfolded vertex
+    unfolded_vert = None
+    unfolded_e_p = None #which particular pair of edge indices in the vert are duplicates
+    for i in xrange(len(self.V)):
+      unfolded_e_p = self.unfolded_edge_pair(i)
+      if unfolded_e_p != None:
+        unfolded_vert = i
+        break
+    
   
   def next_edge(self, current_edge, current_direction):
     """returns the next edge (reading along boundary); for directions, 0 means forward, 1 backward"""
