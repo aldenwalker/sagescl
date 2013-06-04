@@ -1,5 +1,7 @@
 """This module implements a fatgraph class"""
 
+import copy
+
 class Edge:
   def __init__(self, v0, v1, Lf, Lb):
     self.source = v0
@@ -7,26 +9,51 @@ class Edge:
     self.label_forward = Lf
     self.label_backward = Lb
     self.carries_folded_edges = None
+    self.carried_by_edge = None
   
   def __str__(self):
-    return '(' + str(self.source) + '->' + str(self.dest) + ', ' + self.label_forward + ', ' + self.label_backward + ')'
+    s = '(' + str(self.source) + '->' + str(self.dest) + ', ' + self.label_forward + ', ' + self.label_backward + ')'
+    if self.carries_folded_edges != None:
+      s += '; folded: ' + str(self.carries_folded_edges)
+    if hasattr(self, 'dead'):
+      s += "*dead*"
+    if self.carried_by_edge != None:
+      s += ' carried by ' + str(self.carried_by_edge)
+    return s
     
   def __repr__(self):
     return 'Edge(' + ','.join(map(str, [self.source, self.dest, self.label_forward, self.label_backward])) + ')'
   
-class 
-  
+
 class Vertex:
   """a vertex class with ordered edges; note "true" means the edge is leaving"""
-  def __init__(self, edge_list, direction_list):
-    self.edges = [(e, direction_list[i]==1) for i,e in enumerate(edge_list)]
+  def __init__(self, edge_list, direction_list=None):
+    if direction_list == None:
+      self.edges = edge_list
+    else:
+      if len(direction_list) > 0:
+        if type(direction_list[0]) == bool:
+          self.edges = [(e, direction_list[i]) for i,e in enumerate(edge_list)]
+        else:
+          self.edges = [(e, direction_list[i]==1) for i,e in enumerate(edge_list)]
     self.carries_folded_verts = None
+    self.carried_by_vert = None
     
   def __str__(self):
-    return str(self.edges)
+    s =  str(self.edges) 
+    if self.carries_folded_verts != None:
+      s += '; folded: ' + str(self.carries_folded_verts)
+    if hasattr(self, 'dead'):
+      s += "*dead*"
+    if self.carried_by_vert != None:
+      s += ' carried by ' + str(self.carried_by_vert)
+    return s
   
   def __repr__(self):
-    return str(self)
+    return 'Vertex(' + str(self.edges) + ')'
+  
+  def find_edge_ind(self, e, dir) :
+    return self.edges.index( (e, dir) )
   
   def num_edges(self):
     return len(self.edges)
@@ -51,8 +78,8 @@ class Fatgraph:
   def __init__(self, verts, edges):
     self.V = [x for x in verts]
     self.E = [x for x in edges]
-    self.folded_V = None
-    self.folded_E = None
+    self.unfolded_V = None
+    self.unfolded_E = None
   
   def __repr__(self):
     return 'Fatgraph(' + str(self.V) + ', ' + str(self.E) + ')'
@@ -66,6 +93,15 @@ class Fatgraph:
     ans += "Edges:\n"
     for i,e in enumerate(self.E):
       ans += str(i) + ": " + str(e) + '\n'
+    if self.unfolded_V != None:
+      ans += 'Unfolded vertices:\n'
+      for i,v in enumerate(self.unfolded_V):
+        ans += str(i) + ": " + str(v) + '\n'
+    if self.unfolded_E != None:
+      ans += 'Unfolded edges: \n'
+      for i,e in enumerate(self.unfolded_E):
+        ans += str(i) + ": " + str(e) + '\n'
+      
     return ans
   
   def outgoing_labels(self, ind):
@@ -77,6 +113,50 @@ class Fatgraph:
       else:
         ans.append( self.E[i].label_backward )
     return ans
+  
+  def cleanup(self):
+    """removes dead edges and vertices (it's an error if they are not actually dead)"""
+    #figure out where the edges and vertices will go
+    dest_edges = range(len(self.E))
+    dest_verts = range(len(self.V))
+    num_edges = 0
+    num_verts = 0
+    for i in xrange(len(self.E)):
+      if hasattr(self.E[i], 'dead'):
+        dest_edges[i] = -1
+        continue
+      dest_edges[i] = num_edges
+      num_edges += 1
+    
+    for i in xrange(len(self.V)):
+      if hasattr(self.V[i], 'dead'):
+        dest_verts[i] = -1
+        continue
+      dest_verts[i] = num_verts
+      num_verts += 1
+    
+    for i in xrange(len(self.E)):
+      if dest_edges[i] == -1:
+        continue
+      self.E[i].source = dest_verts[self.E[i].source]
+      self.E[i].dest = dest_verts[self.E[i].dest]
+      if self.E[i].carries_folded_edges != None:
+        for j in self.E[i].carries_folded_edges:
+          self.unfolded_E[j].carried_by_edge = dest_edges[i]
+      self.E[dest_edges[i]] = self.E[i]
+      
+    for i in xrange(len(self.V)):
+      if dest_verts[i] == -1:
+        continue
+      for j in xrange(len(self.V[i].edges)):
+        self.V[i].edges[j] = (dest_edges[self.V[i].edges[j][0]], self.V[i].edges[j][1])
+      if self.V[i].carries_folded_verts != None:
+        for j in self.V[i].carries_folded_verts:
+          self.unfolded_V[j].carried_by_vert = dest_verts[i]
+      self.V[dest_verts[i]] = self.V[i]
+    del self.E[num_edges:]
+    del self.V[num_verts:]
+  
   
   def unfolded_edge_pair(self, v_ind):
     """returns a pair of edge indices which have the same outgoing label,
@@ -93,27 +173,104 @@ class Fatgraph:
   def fold(self): 
     """returns the folded version of the fatgraph, with the folded structure"""
     #initialize the new folded fatgraph
+    new_F = Fatgraph(self.V, self.E)
+    new_F.unfolded_V = copy.deepcopy(self.V)
+    new_F.unfolded_E = copy.deepcopy(self.E)
+    for i in xrange(len(new_F.V)):
+      new_F.V[i].carries_folded_verts = [i]
+    for i in xrange(len(new_F.E)):
+      new_F.E[i].carries_folded_edges = [i]
     
-    
-    
-    #find an unfolded vertex
-    unfolded_vert = None
-    unfolded_e_p = None #which particular pair of edge indices in the vert are duplicates
-    for i in xrange(len(self.V)):
-      unfolded_e_p = self.unfolded_edge_pair(i)
-      if unfolded_e_p != None:
-        unfolded_vert = i
+    while True:
+      print "Current fatgraph: "
+      print new_F
+      
+      #find an unfolded vertex
+      unfolded_vert = None
+      unfolded_e_p = None #which particular pair of edge indices in the vert are duplicates
+      for i in xrange(len(new_F.V)):
+        unfolded_e_p = new_F.unfolded_edge_pair(i)
+        if unfolded_e_p != None:
+          unfolded_vert = i
+          break
+      if unfolded_vert == None:
         break
+      
+      print "Found unfolded vertex ", unfolded_vert, " with edges ", unfolded_e_p
+      
+      #fold the edges together
+      i1, i2 = unfolded_e_p
+      v = new_F.V[unfolded_vert]
+      e1, e2 = new_F.E[v.edges[i1][0]], new_F.E[v.edges[i2][0]]
+      e1.carries_folded_edges.extend(e2.carries_folded_edges)
+      e2.dead = True
+      
+      print "This is edges with main indices ", v.edges[i1], ' and ', v.edges[i2]
+      
+      #fold the vertices together    
+      other_vert_1 = (e1.dest if v.edges[i1][1] else e1.source)
+      other_vert_2 = (e2.dest if v.edges[i2][1] else e2.source)
+      
+      print "The vertices to fold together are ", other_vert_1, ' and ', other_vert_2
+      
+      other_vert_2_ind = new_F.V[other_vert_2].find_edge_ind(v.edges[i2][0], not v.edges[i2][1])
+      if unfolded_vert == other_vert_2:
+        #we need to erase both v.edges[i2] and v.edges[other_vert_2_ind]
+        del v.edges[max(i2, other_vert_2_ind)]
+        del v.edges[min(i2, other_vert_2_ind)]
+      else:
+        del v.edges[i2]
+        del new_F.V[other_vert_2].edges[other_vert_2_ind]
+        
+      if other_vert_1 != other_vert_2:
+        for i in xrange(len(new_F.V[other_vert_2].edges)):
+          ei = new_F.V[other_vert_2].edges[i]
+          if ei[1]:
+            new_F.E[ei[0]].source = other_vert_1
+          else:
+            new_F.E[ei[0]].dest = other_vert_1
+        new_F.V[other_vert_1].edges.extend(new_F.V[other_vert_2].edges)
+        new_F.V[other_vert_1].carries_folded_verts.extend(new_F.V[other_vert_2].carries_folded_verts)
+        new_F.V[other_vert_2].dead = True
     
+    #the graph is folded now, but we need to clean it up
+    new_F.cleanup()
+    return new_F
+    
+  
+  def non_injective_pieces(self):
+    """for a folded fatgraph, returns the rectangles and polygons 
+    which can be assembled to give any loop in the kernel"""
+    
+    rectangles = []
+    polygons = []
+    
+    #go through all the edges, and look at the original edges they carry
+    #any pair of original edges they carry is a legitimate rectangle
+    #a rectangle is a pair ((e1, bool), (e2,bool)), where the bools
+    #record whether the edge is forward or backward
+    
+    for e in self.E:
+      for i in xrange(len(e.carries_folded_edges)):
+        e1 = e.carries_folded_edges[i]
+        dir1 = (self.unfolded_E[e1].forward_label == e.forward_label)
+        for j in xrange(i+1, len(e.carries_folded_edges)):
+          e2 = e.carries_folded_edges[j]
+          dir2 = (self.unfolded_E[e2].forward_label == e.forward_label)
+          
+  
+  
   
   def next_edge(self, current_edge, current_direction):
     """returns the next edge (reading along boundary); for directions, 0 means forward, 1 backward"""
+    if type(current_direction) == bool:
+      current_direction = (0 if current_direction else 1)
     e = self.E[current_edge]
     vert = self.V[(e.dest if current_direction==0 else e.source)]
-    to_look_for = (current_edge, current_direction)
+    to_look_for = (current_edge, current_direction==0)
     ind = vert.edges.index(to_look_for)
     ind = (ind+1)%len(vert.edges)
-    return vert.edges[ind][0], 1-vert.edges[ind][1]  #it's 1- because if it's outgoing (1), then we do it forward (0)
+    return vert.edges[ind][0], not vert.edges[ind][1]  #it's 1- because if it's outgoing (1), then we do it forward (0)
   
   def boundaries(self):
     """returns a list of the boundary words in the fatgraph"""
@@ -142,6 +299,7 @@ class Fatgraph:
         boundaries[-1] += (e.label_forward if current_direction==0 else e.label_backward)
         edges_read_list[current_edge][current_direction] = True
         current_edge, current_direction = self.next_edge(current_edge, current_direction)
+        current_direction = (0 if current_direction else 1)
     return boundaries
   
   def boundaries_with_patterns(self):
