@@ -170,7 +170,7 @@ class Fatgraph:
       outgoing_labels[ol] = i
     return None
   
-  def fold(self): 
+  def fold(self, verbose=False): 
     """returns the folded version of the fatgraph, with the folded structure"""
     #initialize the new folded fatgraph
     new_F = Fatgraph(self.V, self.E)
@@ -182,8 +182,9 @@ class Fatgraph:
       new_F.E[i].carries_folded_edges = [i]
     
     while True:
-      print "Current fatgraph: "
-      print new_F
+      if verbose:
+        print "Current fatgraph: "
+        print new_F
       
       #find an unfolded vertex
       unfolded_vert = None
@@ -196,7 +197,8 @@ class Fatgraph:
       if unfolded_vert == None:
         break
       
-      print "Found unfolded vertex ", unfolded_vert, " with edges ", unfolded_e_p
+      if verbose:
+        print "Found unfolded vertex ", unfolded_vert, " with edges ", unfolded_e_p
       
       #fold the edges together
       i1, i2 = unfolded_e_p
@@ -205,13 +207,15 @@ class Fatgraph:
       e1.carries_folded_edges.extend(e2.carries_folded_edges)
       e2.dead = True
       
-      print "This is edges with main indices ", v.edges[i1], ' and ', v.edges[i2]
+      if verbose:
+        print "This is edges with main indices ", v.edges[i1], ' and ', v.edges[i2]
       
       #fold the vertices together    
       other_vert_1 = (e1.dest if v.edges[i1][1] else e1.source)
       other_vert_2 = (e2.dest if v.edges[i2][1] else e2.source)
       
-      print "The vertices to fold together are ", other_vert_1, ' and ', other_vert_2
+      if verbose:
+        print "The vertices to fold together are ", other_vert_1, ' and ', other_vert_2
       
       other_vert_2_ind = new_F.V[other_vert_2].find_edge_ind(v.edges[i2][0], not v.edges[i2][1])
       if unfolded_vert == other_vert_2:
@@ -238,12 +242,11 @@ class Fatgraph:
     return new_F
     
   
-  def non_injective_pieces(self):
-    """for a folded fatgraph, returns the rectangles and polygons 
+  def non_injective_rectangles(self):
+    """for a folded fatgraph, returns the rectangles
     which can be assembled to give any loop in the kernel"""
     
     rectangles = []
-    polygons = []
     
     #go through all the edges, and look at the original edges they carry
     #any pair of original edges they carry is a legitimate rectangle
@@ -253,16 +256,75 @@ class Fatgraph:
     for e in self.E:
       for i in xrange(len(e.carries_folded_edges)):
         e1 = e.carries_folded_edges[i]
-        dir1 = (self.unfolded_E[e1].forward_label == e.forward_label)
+        dir1 = (self.unfolded_E[e1].label_forward == e.label_forward)
         for j in xrange(i+1, len(e.carries_folded_edges)):
           e2 = e.carries_folded_edges[j]
-          dir2 = (self.unfolded_E[e2].forward_label != e.forward_label)
+          dir2 = (self.unfolded_E[e2].label_forward != e.label_forward)
           rectangles.append( ((e1, dir1), (e2, dir2)) )
           rectangles.append( ((e2, not dir2), (e1, not dir1)) )
     
-     
-          
+    return rectangles
   
+  
+  def kernel_elements(self):
+    """return an element in the kernel of the map to the free group"""
+    R = self.non_injective_rectangles()
+    
+    #the stack keeps all the current tree pieces, all of which should have one 
+    #boundary edge.  this starts as just the rectangles which pinch off
+    
+    S = []
+    
+    for i in xrange(len(R)):
+      (e1, dir1), (e2, dir2) = R[i]
+      E1, E2 = self.unfolded_E[e1], self.unfolded_E[e2]
+      iv1, dv1 = ((E1.source, E1.dest) if dir1 else (E1.dest, E1.source))
+      iv2, dv2 = ((E2.source, E2.dest) if dir2 else (E2.dest, E2.source))
+      if self.unfolded_V[iv1].carried_by_vert != self.unfolded_V[dv2].carried_by_vert:
+        print "Error edges don't make sense"
+      elif self.unfolded_V[dv1].carried_by_vert != self.unfolded_V[iv2].carried_by_vert:
+        print "Error edges don't make sense"
+      if iv1 == dv2:
+        #start a fatgraph
+        e = Edge(0,1,(e1, dir1), (e2, dir2))
+        v0 = Vertex([(0, True)])
+        v1 = Vertex([(0, False)])
+        F = Fatgraph([v01, v1], [e])
+        F.open_position = (1, 0) #1st vertex, 0th position
+        F.open_edge = ( (dv1, (E1.label_forwards if dir1 else E1.label_backward)), \
+                        (iv2, (E2.label_forwards if dir2 else E2.label_backward)) )
+        F.open_vertex = self.unfolded_V[dv1].carried_by_vert
+        F.open_vertex_arrival_time = 0
+        S.append(F)
+      if dv1 == iv2:
+        e = Edge(0,1,(e2, dir2), (e1, dir1))
+        v0 = Vertex([(0, True)])
+        v1 = Vertex([(0, False)])
+        F = Fatgraph([v01, v1], [e])
+        F.open_position = (1,0)
+        F.open_edge = ( (dv2, (E2.label_forwards if dir2 else E2.label_backward)), \
+                        (iv1, (E1.label_forwards if dir1 else E1.label_backward)) )
+        F.open_vertex = self.unfolded_V[dv2].carried_by_vert
+        F.open_vertex_arrival_time = 0
+        S.append(F)
+        
+    # we've initialized the set of trees 
+    # at every step, there are two stages.
+    #
+    # First, we see if any open edges can be simply extended
+    # 
+    # next, we collect the trees that are at each vertex
+    # into strings and loops -- a loop gives a complete tree which is finished
+    # a loop gives a new tree with an open edge at the same vertex
+    # a string or loop must have some tree with arrival time now 
+    # (otherwise, we'd generate the same trees multiple times)
+    while True:
+      # collect trees into strings and loops
+      trees_at_vert = {}
+      for i in xrange(len(S)):
+        trees_at_vert[S[i].open_vertex] = trees_at_vert.get(S[i].open_vertex, []) + [i]
+      for ind in trees_at_vert:
+        PASSSSS
   
   
   def next_edge(self, current_edge, current_direction):
