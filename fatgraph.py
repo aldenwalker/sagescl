@@ -256,7 +256,11 @@ class Fatgraph:
         dir1 = (self.unfolded_E[e1].forward_label == e.forward_label)
         for j in xrange(i+1, len(e.carries_folded_edges)):
           e2 = e.carries_folded_edges[j]
-          dir2 = (self.unfolded_E[e2].forward_label == e.forward_label)
+          dir2 = (self.unfolded_E[e2].forward_label != e.forward_label)
+          rectangles.append( ((e1, dir1), (e2, dir2)) )
+          rectangles.append( ((e2, not dir2), (e1, not dir1)) )
+    
+     
           
   
   
