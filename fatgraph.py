@@ -324,7 +324,8 @@ class Fatgraph:
       for i in xrange(len(S)):
         trees_at_vert[S[i].open_vertex] = trees_at_vert.get(S[i].open_vertex, []) + [i]
       for ind in trees_at_vert:
-        PASSSSS
+        tav = trees_at_vert[ind]
+        
   
   
   def next_edge(self, current_edge, current_direction):
