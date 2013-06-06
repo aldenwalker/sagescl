@@ -1,6 +1,10 @@
 """This module implements a fatgraph class"""
 
+
+from word import *
+
 import copy
+
 
 class Edge:
   def __init__(self, v0, v1, Lf, Lb):
@@ -264,6 +268,71 @@ class Fatgraph:
           rectangles.append( ((e2, not dir2), (e1, not dir1)) )
     
     return rectangles
+  
+  
+  def non_injective_pieces(self):
+    
+    #first let's get a list of the incoming and outgoing letters for 
+    #every vertex
+    incoming_letters = len(self.unfolded_V)*[[]]
+    outgoing_letters = len(self.unfolded_V)*[[]]
+    for i,v in enumerate(self.unfolded_V):
+      outgoing_letters[i] = [(self.unfolded_E[ei].label_forward if edir else self.unfolded_E[ei].label_backward) for ei, edir in v.edges]
+      outgoing_letters[i] = list(set(outgoing_letters[i]))
+    incoming_letters = map(inverse, outgoing_letters)
+    
+    rectangles = []
+    
+    #go through all the edges, and look at the original edges they carry
+    #any pair of original edges they carry is a legitimate rectangle
+    #a rectangle is a pair ((e1, bool, w1), (e2,bool, w2)), where the bools
+    #record whether the edge is forward or backward, and the w's record 
+    #the three-letter word centered on the rectangle
+        
+    for e in self.E:
+      for i in xrange(len(e.carries_folded_edges)):
+        e1 = e.carries_folded_edges[i]
+        dir1 = (self.unfolded_E[e1].label_forward == e.label_forward)
+        e1letter = (e.label_forward if dir1 else e.label_backward)
+        e1_ivert = (self.unfolded_E[e1].source if dir1 else self.unfolded_E[e1].dest)
+        e1_dvert = (self.unfolded_E[e1].dest if dir1 else self.unfolded_E[e1].source)
+        preceeding_letter_ops1 = [ell for ell in incoming_letters[e1_ivert] if ell != inverse(e1letter)]
+        succeeding_letter_ops1 = [ell for ell in outgoing_letters[e1_dvert] if ell != inverse(e1letter)]
+        for j in xrange(i+1, len(e.carries_folded_edges)):
+          e2 = e.carries_folded_edges[j]
+          dir2 = (self.unfolded_E[e2].label_forward != e.label_forward)
+          e2letter = (e.label_backward if dir2 else e.label_forward)
+          e2_ivert = (self.unfolded_E[e2].source if dir2 else self.unfolded_E[e2].dest)
+          e2_dvert = (self.unfolded_E[e2].dest if dir2 else self.unfolded_E[e2].source)
+          preceeding_letter_ops2 = [ell for ell in incoming_letters[e2_ivert] if ell != inverse(e2letter)]
+          succeeding_letter_ops2 = [ell for ell in outgoing_letters[e2_dvert] if ell != inverse(e2letter)]
+          for p1 in preceeding_letter_ops1:
+            for s1 in succeeding_letter_ops1:
+              for p2 in preceeding_letter_ops2:
+                for s2 in succeeding_letter_ops2:
+                  rectangles.append( ((e1, dir1, p1+e1letter+s1), (e2, dir2, p2+e2letter+s2)) )
+                  rectangles.append( ((e2, not dir2, inverse(p1+e1letter+s1)), (e1, not dir1, inverse(p2+e2letter+s2))) )
+    
+    #an edge is ( (v1, w1), (v2, w2) ), where the vi are unfolded vertices, 
+    #and the wi are pairs of letters which are incoming, outgoing
+    #the inverse of edge ((v1,w1),(v2,w2)) is ((v2,y),(v1,x))
+    #note v1!=v2
+    #we'll only record an index when v1<v2, so we have a unique rep
+    #also note, v1 and v2 have to be carried by the same folded vertex
+    gluing_edges = []
+    ws = [[w11+w12 for w11 in incoming_letters[i] for w12 in outgoing_letters[i] if w12 != w11.swapcase()] for i in xrange(len(self.unfolded_V))]
+    for i,v in enumerate(self.V):
+      for j in v.carries_folded_verts:
+        for k in v.carries_folded_verts:
+          if k == j:
+            continue
+          for w1 in ws[j]:
+            for w2 in ws[k]:
+              gluing_edges.append( ((j,w1),(k,w2)) )
+    
+    #now we must build the polygons
+    #this is simply all triangles (triple of distinct 
+  
   
   
   def kernel_elements(self):
