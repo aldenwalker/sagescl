@@ -2,6 +2,7 @@
 
 
 from word import *
+from sage.all import *
 
 import copy
 
@@ -293,7 +294,7 @@ class Fatgraph:
       for i in xrange(len(e.carries_folded_edges)):
         e1 = e.carries_folded_edges[i]
         dir1 = (self.unfolded_E[e1].label_forward == e.label_forward)
-        e1letter = (e.label_forward if dir1 else e.label_backward)
+        e1letter = e.label_forward
         e1_ivert = (self.unfolded_E[e1].source if dir1 else self.unfolded_E[e1].dest)
         e1_dvert = (self.unfolded_E[e1].dest if dir1 else self.unfolded_E[e1].source)
         preceeding_letter_ops1 = [ell for ell in incoming_letters[e1_ivert] if ell != inverse(e1letter)]
@@ -301,41 +302,273 @@ class Fatgraph:
         for j in xrange(i+1, len(e.carries_folded_edges)):
           e2 = e.carries_folded_edges[j]
           dir2 = (self.unfolded_E[e2].label_forward != e.label_forward)
-          e2letter = (e.label_backward if dir2 else e.label_forward)
+          e2letter = e.label_backward
           e2_ivert = (self.unfolded_E[e2].source if dir2 else self.unfolded_E[e2].dest)
           e2_dvert = (self.unfolded_E[e2].dest if dir2 else self.unfolded_E[e2].source)
           preceeding_letter_ops2 = [ell for ell in incoming_letters[e2_ivert] if ell != inverse(e2letter)]
           succeeding_letter_ops2 = [ell for ell in outgoing_letters[e2_dvert] if ell != inverse(e2letter)]
-          for p1 in preceeding_letter_ops1:
+          #print (j,e2,dir2,e2letter,e2_ivert, e2_dvert)
+          if e1_ivert == e2_dvert and e1_dvert == e2_ivert:
+            #this is a totally dummy rectangle; I guess add it twice
+            rectangles.append( ((e1, dir1, e1letter), (e2, dir2, e2letter)) )
+            #rectangles.append( ((e2, not dir2, inverse(e2letter)), (e1, not dir1, inverse(e1letter))) )
+          elif e1_ivert == e2_dvert:
+            #the first edge is a dummy edge; we only need to iterate over possible other letters
             for s1 in succeeding_letter_ops1:
               for p2 in preceeding_letter_ops2:
-                for s2 in succeeding_letter_ops2:
-                  rectangles.append( ((e1, dir1, p1+e1letter+s1), (e2, dir2, p2+e2letter+s2)) )
-                  rectangles.append( ((e2, not dir2, inverse(p1+e1letter+s1)), (e1, not dir1, inverse(p2+e2letter+s2))) )
+                rectangles.append( ((e1, dir1, e1letter+s1), (e2, dir2, p2+e2letter)) )
+                rectangles.append( ((e2, not dir2, inverse(p2+e2letter)), (e1, not dir1, inverse(e1letter+s1))) )
+          elif e1_dvert == e2_ivert:
+            #the second edge is a summy edge; we only need to do the other letters
+            for p1 in preceeding_letter_ops1:
+              for s2 in succeeding_letter_ops2:
+                rectangles.append( ((e1, dir1, p1+e1letter), (e2, dir2, e2letter+s2)) )
+                rectangles.append( ((e2, not dir2, inverse(e2letter+s2)), (e1, not dir1, inverse(p1+e1letter))) )
+          else:
+            #both edges will be nontrivial; we need to look at all of them
+            for p1 in preceeding_letter_ops1:
+              for s1 in succeeding_letter_ops1:
+                for p2 in preceeding_letter_ops2:
+                  for s2 in succeeding_letter_ops2:
+                    rectangles.append( ((e1, dir1, p1+e1letter+s1), (e2, dir2, p2+e2letter+s2)) )
+                    rectangles.append( ((e2, not dir2, inverse(p2+e2letter+s2)), (e1, not dir1, inverse(p1+e1letter+s1))) )
     
     #an edge is ( (v1, w1), (v2, w2) ), where the vi are unfolded vertices, 
     #and the wi are pairs of letters which are incoming, outgoing
-    #the inverse of edge ((v1,w1),(v2,w2)) is ((v2,y),(v1,x))
-    #note v1!=v2
-    #we'll only record an index when v1<v2, so we have a unique rep
+    #the inverse of edge ((v1,w1),(v2,w2)) is ((v2,w2),(v1,w1))
+    #note, if v1 == v2, then we can cut the tree to reduce its size, so 
+    #we may assume that v1 != v2
+    #we will assume that v1 < v2 for uniqueness
     #also note, v1 and v2 have to be carried by the same folded vertex
     gluing_edges = []
     ws = [[w11+w12 for w11 in incoming_letters[i] for w12 in outgoing_letters[i] if w12 != w11.swapcase()] for i in xrange(len(self.unfolded_V))]
     for i,v in enumerate(self.V):
       for j in v.carries_folded_verts:
         for k in v.carries_folded_verts:
-          if k == j:
+          if k <= j:
             continue
           for w1 in ws[j]:
             for w2 in ws[k]:
               gluing_edges.append( ((j,w1),(k,w2)) )
     
-    #now we must build the polygons
-    #this is simply all triangles (triple of distinct 
+    #this is an argument not to use C++:
+    gluing_edge_index = dict([ (gluing_edges[i], i) for i in xrange(len(gluing_edges))])
+    
+    #now we must build the triangles
+    #this is simply all triangles (triple of distinct vertices-plus-words)
+    #a triangle is a triple ((v1,w1), (v2, w2), (v2,w3))
+    #all vertices of the triangle are unique (otherwise we could reduce the tree)
+    #and all vertices must be carried by the same folded vertex
+    triangles = []
+    for v in self.V:
+      for i in v.carries_folded_verts:
+        for j in v.carries_folded_verts:
+          if j <= i:
+            continue
+          for k in v.carries_folded_verts:
+            if k <= i or k==j:
+              continue
+            for w1 in ws[i]:
+              for w2 in ws[j]:
+                for w3 in ws[k]:
+                  triangles.append( ((i,w1),(j,w2),(k,w3)) )
+    
+    return rectangles, gluing_edges, triangles
+    
+  def rectangle_boundary(self, r):
+    """returns the boundary of a rectangle, as a tuple of two edges"""
+    ((e1, dir1, w1), (e2, dir2, w2)) = r
+    v11 = (self.unfolded_E[e1].source if dir1 else self.unfolded_E[e1].dest)
+    v12 = (self.unfolded_E[e1].dest if dir1 else self.unfolded_E[e1].source)
+    v21 = (self.unfolded_E[e2].source if dir2 else self.unfolded_E[e2].dest)
+    v22 = (self.unfolded_E[e2].dest if dir2 else self.unfolded_E[e2].source)
+
+    edge1 = ( ((v22,w2[-2:]),(v11,w1[:2])) if v11 != v22 else (None, v11))
+    edge2 = ( ((v12,w1[-2:]),(v21,w2[:2])) if v21 != v12 else (None, v21))
+    return (edge1, edge2)
+  
+  def rectangle_verts(self, r):
+    """returns a list (potentially with dupes) of the vertices in a rectangle"""
+    ((e1, dir1, w1), (e2, dir2, w2)) = r
+    v11 = (self.unfolded_E[e1].source if dir1 else self.unfolded_E[e1].dest)
+    v12 = (self.unfolded_E[e1].dest if dir1 else self.unfolded_E[e1].source)
+    v21 = (self.unfolded_E[e2].source if dir2 else self.unfolded_E[e2].dest)
+    v22 = (self.unfolded_E[e2].dest if dir2 else self.unfolded_E[e2].source)
+    return ([v11,v22] if v11!=v22 else [v11]) + ([v12,v21] if v12!=v21 else [v12])
+  
+  def kernel_element(self, required_vert=None):
+    """return an element in the kernel"""
+    #we do a linear programming problem
+    R, GE, T = self.non_injective_pieces()
+    #there's a column for every rectangle and triangle
+    num_rects = len(R)
+    num_triangles = len(T)
+    num_cols = num_rects + len(T)
+    #there's a row for every edge, plus a row to ensure that chi = 1
+    num_rows = len(GE) + 1 + (1 if required_vert!=None else 0)
+    
+    p = MixedIntegerLinearProgram(solver='ppl', maximization=False)
+    x = p.new_variable()
+    
+    #the objective is L1 norm on the rectangles
+    p.set_objective( p.sum([x[i] for i in xrange(num_rects)]) )
+    
+    #for each edge, add the constraint
+    #notice that every triangle and rectangle cannot contain an edge more than once
+    #so it contributes only -1, 0,or 1
+    for e in GE:
+      lf = 0
+      eb = (e[1], e[0])
+      for i,r in enumerate(R):
+        rbound = self.rectangle_boundary(r)
+        if e in rbound:
+          lf += x[i]
+        elif eb in rbound:
+          lf += (-1)*x[i]
+      for i,t in enumerate(T):
+        if e in t:
+          lf += x[num_rects + i]
+        elif eb in t:
+          lf += (-1)*v[num_rects + i]
+      p.add_constraint(lf, min=0, max=0)
+    
+    #also add the constraint that chi=1
+    #here, triangles contribute -(1/2), normal rectangles contribute 0, 
+    #and rectangles with an open end constribute 1/2
+    #rectangles with two open ends contribute 1
+    lf = 0
+    for i,r in enumerate(R):
+      coef = 0
+      edge1, edge2 = self.rectangle_boundary(r)
+      if edge1[0] == None:
+        coef += 1
+      if edge2[0] == None:
+        coef += 1
+      if coef > 0:
+        lf += coef*x[i]
+    #all of the triangles contribute -1/2
+    lf += p.sum([ (-1)*x[num_rects + i] for i in xrange(num_triangles)])
+    p.add_constraint(lf, min=2, max=2)
+    
+    #if there's a vertex that we're required to hit, then add that in as 
+    #a constraint
+    if required_vert != None:
+      v = required_vert
+      lf = 0
+      print "Requiring vert ", v
+      for i,r in enumerate(R):
+        coef = self.rectangle_verts(r).count(v)
+        if coef > 0:
+          lf += coef*x[i]
+      p.add_constraint(lf, min=2)
+      
+    p.show()
+     
+    obj_L1 = p.solve()
+    x_solution = p.get_values(x)
+    
+    
+    #now we can assemble the pieces to obtain an actual tree
+    #first, we clear denominators (unecessary?), taking an integer number 
+    #of copies of each piece.
+    #for each edge, we'll assign a permutation of the adjacent pieces
+    multiplier = lcm([x_solution[i].denominator() for i in xrange(num_cols)])
+    pieces = []
+    piece_indices_for_edge = {}
+    for i,r in enumerate(R):
+      coef = multiplier*x_solution[i]
+      if coef == 0:
+        continue
+      rbound = self.rectangle_boundary(r)
+      piece_indices_for_edge[rbound[0]] = piece_indices_for_edge.get(rbound[0], []) + [len(pieces) + j for j in xrange(coef)]
+      piece_indices_for_edge[rbound[1]] = piece_indices_for_edge.get(rbound[1], []) + [len(pieces) + j for j in xrange(coef)]
+      pieces.extend(coef*[('r',r)])
+    num_rect_pieces = len(pieces)
+    for i,t in enumerate(T):
+      coef = multiplier*x_solution[num_rects+i]
+      if coef == 0:
+        continue
+      tbound = ( (t[0], t[1]), (t[1],t[2]), (t[2],t[0]) )
+      for tb in tbound:
+        piece_indices_for_edge[tb] = piece_indices_for_edge.get(tb, []) + [len(pieces) + j for j in xrange(coef)]
+      pieces.extend(coef*[('t',t)])
+    #the permutation is that we match up the piece_indices_for_edge for an edge and its inverse
+    
+    print "Pieces: ", pieces
+    
+    #now we trace out the boundary
+    #we start at some location, and follow the edges
+    #the result is a list of edges with signs
+    have_visted_piece = [False for i in xrange(num_rect_pieces)]
+    boundaries = []
+    while True:
+      #find an unvisited piece 
+      try:
+        start_index = have_visted_piece.index(False)
+      except ValueError:
+        break
+      edge_list = []
+      boundary = ''
+      cur_ind_in_piece = 0
+      cur_piece_ind = start_index
+      kind,p = pieces[cur_piece_ind]
+      while True:
+        print "Boundary: ",boundary
+        print "Edge list: ", edge_list
+        print "cur_piece_ind, cur_ind_in_piece, kind, p: ", cur_piece_ind, cur_ind_in_piece, kind, p
+        #read off the boundary label, and figure out what the outgoing edge is
+        have_visted_piece[cur_piece_ind] = True
+        if kind=='r':
+          edge_list.append( p[cur_ind_in_piece][:2] )
+          if edge_list[-1][1]:
+            boundary += self.unfolded_E[edge_list[-1][0]].label_forward
+          else:
+            boundary += self.unfolded_E[edge_list[-1][0]].label_backward
+          rbound = self.rectangle_boundary(p)
+          outgoing_edge = rbound[1-cur_ind_in_piece]
+        else:
+          outgoing_edge = (p[(cur_ind_in_piece+1)%3], p[(cur_ind_in_piece+2)%3])
+        
+        #get the matching edge to the outgoing edge (if it's a dummy each, turn around)
+        if outgoing_edge[0] == None:
+          next_kind = 'r'
+          next_p = p
+          outgoing_edge_inv = outgoing_edge
+          next_piece_ind = cur_piece_ind
+        else:
+          outgoing_edge_inv = (outgoing_edge[1], outgoing_edge[0])
+          piece_ind_in_edge_list = piece_indices_for_edge[outgoing_edge].index(cur_piece_ind)
+          next_piece_ind = piece_indices_for_edge[outgoing_edge_inv][piece_ind_in_edge_list]
+          next_kind, next_p = pieces[next_piece_ind]
+          
+        #get what the next piece is
+        if next_kind == 'r':
+          if self.rectangle_boundary(next_p)[0] == outgoing_edge_inv:
+            next_ind_in_piece = 0
+          else:
+            next_ind_in_piece = 1
+        else:
+          next_ind_in_piece = next_p.index( outgoing_edge_inv )
+        
+        if next_piece_ind == start_index and next_ind_in_piece == 0: 
+          #we're done
+          break
+        #otherwise, loop around
+        kind = next_kind
+        p = next_p
+        cur_ind_in_piece = next_ind_in_piece
+        cur_piece_ind = next_piece_ind
+          
+      #we've got a complete tree now
+      boundaries.append( (edge_list, boundary) )
+    
+    return boundaries
+
+    
+    
   
   
-  
-  def kernel_elements(self):
+  def kernel_elements_old(self):
     """return an element in the kernel of the map to the free group"""
     R = self.non_injective_rectangles()
     
