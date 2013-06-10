@@ -7,6 +7,17 @@ from sage.all import *
 import copy
 
 
+def approx_rat(x, tol=0.0000001):
+  """returns a rational approximation which is closer than tol"""
+  c = continued_fraction_list(x, partial_convergents=True, nterms=10)
+  for r in c[1]:
+    if abs(Integer(r[0])/r[1] - x) < tol:
+      return Integer(r[0])/r[1]
+  return None
+    
+
+
+
 class Edge:
   def __init__(self, v0, v1, Lf, Lb):
     self.source = v0
@@ -41,6 +52,8 @@ class Vertex:
           self.edges = [(e, direction_list[i]) for i,e in enumerate(edge_list)]
         else:
           self.edges = [(e, direction_list[i]==1) for i,e in enumerate(edge_list)]
+      else:
+        self.edges = []
     self.carries_folded_verts = None
     self.carried_by_vert = None
     
@@ -178,7 +191,7 @@ class Fatgraph:
   def fold(self, verbose=False): 
     """returns the folded version of the fatgraph, with the folded structure"""
     #initialize the new folded fatgraph
-    new_F = Fatgraph(self.V, self.E)
+    new_F = Fatgraph(copy.deepcopy(self.V), copy.deepcopy(self.E))
     new_F.unfolded_V = copy.deepcopy(self.V)
     new_F.unfolded_E = copy.deepcopy(self.E)
     for i in xrange(len(new_F.V)):
@@ -195,6 +208,8 @@ class Fatgraph:
       unfolded_vert = None
       unfolded_e_p = None #which particular pair of edge indices in the vert are duplicates
       for i in xrange(len(new_F.V)):
+        if hasattr(new_F.V[i], 'dead'):
+          continue
         unfolded_e_p = new_F.unfolded_edge_pair(i)
         if unfolded_e_p != None:
           unfolded_vert = i
@@ -396,7 +411,7 @@ class Fatgraph:
     v22 = (self.unfolded_E[e2].dest if dir2 else self.unfolded_E[e2].source)
     return ([v11,v22] if v11!=v22 else [v11]) + ([v12,v21] if v12!=v21 else [v12])
   
-  def kernel_element(self, required_vert=None):
+  def kernel_element(self, required_vert=None, verbose=0):
     """return an element in the kernel"""
     #we do a linear programming problem
     R, GE, T = self.non_injective_pieces()
@@ -407,7 +422,8 @@ class Fatgraph:
     #there's a row for every edge, plus a row to ensure that chi = 1
     num_rows = len(GE) + 1 + (1 if required_vert!=None else 0)
     
-    p = MixedIntegerLinearProgram(solver='ppl', maximization=False)
+    #p = MixedIntegerLinearProgram(solver='ppl', maximization=False)
+    p = MixedIntegerLinearProgram(maximization=False)
     x = p.new_variable()
     
     #the objective is L1 norm on the rectangles
@@ -462,7 +478,11 @@ class Fatgraph:
           lf += coef*x[i]
       p.add_constraint(lf, min=2)
       
-    p.show()
+    if verbose > 0:
+      print "Done creating LP."
+      sys.stdout.flush()
+      if verbose > 1:
+        p.show()
      
     obj_L1 = p.solve()
     x_solution = p.get_values(x)
@@ -472,11 +492,14 @@ class Fatgraph:
     #first, we clear denominators (unecessary?), taking an integer number 
     #of copies of each piece.
     #for each edge, we'll assign a permutation of the adjacent pieces
-    multiplier = lcm([x_solution[i].denominator() for i in xrange(num_cols)])
+    rat_soln = [x_solution[i] for i in xrange(num_cols)]
+    if not hasattr(rat_soln[0], 'denominator'):
+      rat_soln = [approx_rat(x) for x in rat_soln]
+    multiplier = lcm([rat_soln[i].denominator() for i in xrange(num_cols)])
     pieces = []
     piece_indices_for_edge = {}
     for i,r in enumerate(R):
-      coef = multiplier*x_solution[i]
+      coef = multiplier*rat_soln[i]
       if coef == 0:
         continue
       rbound = self.rectangle_boundary(r)
@@ -485,7 +508,7 @@ class Fatgraph:
       pieces.extend(coef*[('r',r)])
     num_rect_pieces = len(pieces)
     for i,t in enumerate(T):
-      coef = multiplier*x_solution[num_rects+i]
+      coef = multiplier*rat_soln[num_rects+i]
       if coef == 0:
         continue
       tbound = ( (t[0], t[1]), (t[1],t[2]), (t[2],t[0]) )
@@ -494,7 +517,8 @@ class Fatgraph:
       pieces.extend(coef*[('t',t)])
     #the permutation is that we match up the piece_indices_for_edge for an edge and its inverse
     
-    print "Pieces: ", pieces
+    if verbose > 0:
+      print "Pieces: ", pieces
     
     #now we trace out the boundary
     #we start at some location, and follow the edges
@@ -636,10 +660,10 @@ class Fatgraph:
       current_direction = (0 if current_direction else 1)
     e = self.E[current_edge]
     vert = self.V[(e.dest if current_direction==0 else e.source)]
-    to_look_for = (current_edge, current_direction==0)
+    to_look_for = (current_edge, (1-current_direction)==0)
     ind = vert.edges.index(to_look_for)
     ind = (ind+1)%len(vert.edges)
-    return vert.edges[ind][0], not vert.edges[ind][1]  #it's 1- because if it's outgoing (1), then we do it forward (0)
+    return vert.edges[ind][0], vert.edges[ind][1]  #it's 1- because if it's outgoing (1), then we do it forward (0)
   
   def boundaries(self):
     """returns a list of the boundary words in the fatgraph"""
@@ -760,3 +784,43 @@ def read_file(filename):
   f.close()
   
   return Fatgraph(verts, edges)
+
+
+
+def rose_plus_word(g, w):
+  """returns a surface of genus g with one boundary component [a,b][c,d]..., one of 
+  whose generators is labeled by w"""
+  v_edge_list = [ [2*i,2*i+1,2*i,2*i+1] for i in xrange(g)]
+  v_edge_list = [x for L in v_edge_list for x in L]
+  v_dir_list = g*[True, False, False, True]
+  verts = [Vertex(v_edge_list, v_dir_list)]
+  edges = [Edge(0,0,alphabet[i], alphabet[i].swapcase()) for i in xrange(2*g-1)]
+  for i in xrange(len(w)-1):
+    edges.append( Edge(i,i+1,w[i],w[i].swapcase()) )
+    verts.append( Vertex([(2*g-1)+i, (2*g-1)+i+1], [False, True]) )
+  edges.append( Edge(len(w)-1, 0, w[-1], w[-1].swapcase()) )
+  verts[0].edges[-1] = ((2*g-1), True)
+  verts[0].edges[-3] = ((2*g-1)+len(w)-1, False)
+  return Fatgraph(verts, edges)
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
