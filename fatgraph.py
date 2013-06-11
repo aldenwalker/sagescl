@@ -590,68 +590,13 @@ class Fatgraph:
 
     
     
+  def cut_along_loop(self, edge_list):
+    """returns a fatgraph which is self cut along the embedded loop 
+    edge_list, which is a list of ((i,d),...), where i is an edge index and 
+    d is a direction (True = forward)."""
+    #start by splitting one of the vertices
+    
   
-  
-  def kernel_elements_old(self):
-    """return an element in the kernel of the map to the free group"""
-    R = self.non_injective_rectangles()
-    
-    #the stack keeps all the current tree pieces, all of which should have one 
-    #boundary edge.  this starts as just the rectangles which pinch off
-    
-    S = []
-    
-    for i in xrange(len(R)):
-      (e1, dir1), (e2, dir2) = R[i]
-      E1, E2 = self.unfolded_E[e1], self.unfolded_E[e2]
-      iv1, dv1 = ((E1.source, E1.dest) if dir1 else (E1.dest, E1.source))
-      iv2, dv2 = ((E2.source, E2.dest) if dir2 else (E2.dest, E2.source))
-      if self.unfolded_V[iv1].carried_by_vert != self.unfolded_V[dv2].carried_by_vert:
-        print "Error edges don't make sense"
-      elif self.unfolded_V[dv1].carried_by_vert != self.unfolded_V[iv2].carried_by_vert:
-        print "Error edges don't make sense"
-      if iv1 == dv2:
-        #start a fatgraph
-        e = Edge(0,1,(e1, dir1), (e2, dir2))
-        v0 = Vertex([(0, True)])
-        v1 = Vertex([(0, False)])
-        F = Fatgraph([v01, v1], [e])
-        F.open_position = (1, 0) #1st vertex, 0th position
-        F.open_edge = ( (dv1, (E1.label_forwards if dir1 else E1.label_backward)), \
-                        (iv2, (E2.label_forwards if dir2 else E2.label_backward)) )
-        F.open_vertex = self.unfolded_V[dv1].carried_by_vert
-        F.open_vertex_arrival_time = 0
-        S.append(F)
-      if dv1 == iv2:
-        e = Edge(0,1,(e2, dir2), (e1, dir1))
-        v0 = Vertex([(0, True)])
-        v1 = Vertex([(0, False)])
-        F = Fatgraph([v01, v1], [e])
-        F.open_position = (1,0)
-        F.open_edge = ( (dv2, (E2.label_forwards if dir2 else E2.label_backward)), \
-                        (iv1, (E1.label_forwards if dir1 else E1.label_backward)) )
-        F.open_vertex = self.unfolded_V[dv2].carried_by_vert
-        F.open_vertex_arrival_time = 0
-        S.append(F)
-        
-    # we've initialized the set of trees 
-    # at every step, there are two stages.
-    #
-    # First, we see if any open edges can be simply extended
-    # 
-    # next, we collect the trees that are at each vertex
-    # into strings and loops -- a loop gives a complete tree which is finished
-    # a loop gives a new tree with an open edge at the same vertex
-    # a string or loop must have some tree with arrival time now 
-    # (otherwise, we'd generate the same trees multiple times)
-    while True:
-      # collect trees into strings and loops
-      trees_at_vert = {}
-      for i in xrange(len(S)):
-        trees_at_vert[S[i].open_vertex] = trees_at_vert.get(S[i].open_vertex, []) + [i]
-      for ind in trees_at_vert:
-        tav = trees_at_vert[ind]
-        
   
   
   def next_edge(self, current_edge, current_direction):
