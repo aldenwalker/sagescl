@@ -590,14 +590,105 @@ class Fatgraph:
 
     
     
-  def cut_along_loop(self, edge_list):
+  def cut_along_loop(self, edge_list, verbose=0):
     """returns a fatgraph which is self cut along the embedded loop 
     edge_list, which is a list of ((i,d),...), where i is an edge index and 
     d is a direction (True = forward)."""
-    #start by splitting one of the vertices
+    #for each vertex, figure out what vertices to split it into and what edges to attach
+    new_F = Fatgraph(copy.deepcopy(self.V), copy.deepcopy(self.E))
+    done_verts = set()
+    new_edge_translation_table = {} #this records the true index of new edge (ei,0) and (ei,1)
+    for e,d in edge_list:
+      v_ind = (new_F.E[e].dest if d else new_F.E[e].source)
+      if v_ind in done_verts:
+        continue
+      done_verts.add(v_ind)
+      v = new_F.V[v_ind]
+      #find all the edges involving this vertex
+      crossing_list = []
+      edges_to_crossing_list = {}
+      for j,(e2,d2) in enumerate(edge_list):
+        dv = (new_F.E[e2].dest if d2 else new_F.E[e2].source)
+        if dv == v_ind:
+          in_v_ind = v.edges.index( (e2,not d2) )
+          out_v_ind = v.edges.index( edge_list[(j+1)%len(edge_list)] )
+          edges_to_crossing_list[in_v_ind] = (len(crossing_list), 'in')
+          edges_to_crossing_list[out_v_ind] = (len(crossing_list), 'out')
+          crossing_list.append( (j, in_v_ind, out_v_ind) )
+          
+      if verbose > 1:
+        print "Working on cut vertex ", (v_ind, v)
+        print "Found crossing_list: ", crossing_list
+        print "Found edges_to_crossing_list: ", edges_to_crossing_list
+      #now figure out how many vertices and what edges they get etc
+      new_verts = [[] for _ in xrange(len(crossing_list)+1)]
+      num_verts_seen = 0
+      seen_crossing_before = set()
+      current_new_vert_stack = [0] # this stores what new vertices we're working on
+      for j in xrange(len(v.edges)):
+        if verbose>1:
+          print "Dealing with edge ", j
+          print "Current new_verts: ", new_verts
+        if j not in edges_to_crossing_list:
+          new_verts[current_new_vert_stack[-1]].append( (v.edges[j], None) )
+        else: # it IS a cutting edge
+          crossing_ind, d2 = edges_to_crossing_list[j]
+          #print "Found its crossing_ind, d2 = ", crossing_ind, d2
+          if crossing_ind in seen_crossing_before:
+            first_new_vert = current_new_vert_stack[-1]
+            second_new_vert = current_new_vert_stack[-2]
+            del current_new_vert_stack[-1]
+          else:
+            first_new_vert = current_new_vert_stack[-1]
+            num_verts_seen += 1
+            second_new_vert = num_verts_seen
+            current_new_vert_stack.append(num_verts_seen)
+            seen_crossing_before.add(crossing_ind)
+          #print "Found first_new_vert and second_new_vert = ", first_new_vert, second_new_vert
+          if d2 == 'in':
+            new_verts[first_new_vert].append( (v.edges[j], 1) )
+            new_verts[second_new_vert].append( (v.edges[j], 0) )
+          else:
+            new_verts[first_new_vert].append( (v.edges[j], 0) )
+            new_verts[second_new_vert].append( (v.edges[j], 1) )
+      
+      if verbose>1:
+        print "Found the new verts: ", new_verts
+      #now we know what edges go into what vertices
+      #we need to actually make the vertices and attach the edges
+      #we don't need to add a vertex for the 0th guy
+      for j in xrange(len(new_verts)):
+        if j==0:
+          new_vert_ind = v_ind
+          new_F.V[v_ind].edges = []
+        else:
+          new_vert_ind = len(new_F.V)
+          new_F.V.append(Vertex([]))
+          
+        for (e2,d2), ind2 in new_verts[j]:
+          if (e2,ind2) in new_edge_translation_table:
+            correct_edge_ind = new_edge_translation_table[(e2,ind2)]
+          else:
+            if ind2 == 0 or ind2 == None:
+              correct_edge_ind = e2
+              new_edge_translation_table[(e2,ind2)] = e2
+            else:
+              correct_edge_ind = len(new_F.E)
+              new_F.E.append( Edge(0,0,'','') )
+              new_edge_translation_table[(e2,ind2)] = correct_edge_ind
+          if d2:
+            new_F.E[correct_edge_ind].source = new_vert_ind
+            new_F.E[correct_edge_ind].label_forward = new_F.E[e2].label_forward
+            new_F.E[correct_edge_ind].label_backward = new_F.E[e2].label_backward
+          else:
+            new_F.E[correct_edge_ind].dest = new_vert_ind
+          new_F.V[new_vert_ind].edges.append( (correct_edge_ind, d2) )
+          
+    return new_F
     
   
-  
+  def cover_with_loops_embedded(self, path):
+    pass
   
   def next_edge(self, current_edge, current_direction):
     """returns the next edge (reading along boundary); for directions, 0 means forward, 1 backward"""
