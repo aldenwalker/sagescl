@@ -688,7 +688,15 @@ class Fatgraph:
     
   
   def cover_with_loops_embedded(self, path):
-    pass
+    """returns a fatgraph which covers self and which contains a lift of path 
+    which is embedded"""
+    #find the vertices in the path, where they are, and how many times they are hit
+    verts_in_path = {}
+    for i,(e,d) in enumerate(path):
+      dv = (self.E[e].dest if d else self.E[e].source)
+      verts_in_path[dv] = verts_in_path.get(dv,[]) + i
+    cover_deg = max([len(verts_in_path[v]) for v in verts_in_path])
+    
   
   def next_edge(self, current_edge, current_direction):
     """returns the next edge (reading along boundary); for directions, 0 means forward, 1 backward"""
