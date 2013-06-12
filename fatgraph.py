@@ -334,7 +334,7 @@ class Fatgraph:
                 rectangles.append( ((e1, dir1, e1letter+s1), (e2, dir2, p2+e2letter)) )
                 rectangles.append( ((e2, not dir2, inverse(p2+e2letter)), (e1, not dir1, inverse(e1letter+s1))) )
           elif e1_dvert == e2_ivert:
-            #the second edge is a summy edge; we only need to do the other letters
+            #the second edge is a dummy edge; we only need to do the other letters
             for p1 in preceeding_letter_ops1:
               for s2 in succeeding_letter_ops2:
                 rectangles.append( ((e1, dir1, p1+e1letter), (e2, dir2, e2letter+s2)) )
@@ -691,7 +691,7 @@ class Fatgraph:
     """returns a fatgraph which covers self and which contains a lift of path 
     which is embedded"""
     #for the vertices in the path, record which time it's being hit
-    hit_verts_and_times = [(,) for _ in xrange(len(path))]
+    hit_verts_and_times = [0 for _ in xrange(len(path))]
     last_hit_time = {}
     for i,(e,d) in enumerate(path):
       dv = (self.E[e].dest if d else self.E[e].source)
@@ -707,40 +707,57 @@ class Fatgraph:
     #this produces the disconnected n-fold cover
     new_verts = []
     new_edges = []
+    nE = len(self.E)
+    nV = len(self.V)
     for i in xrange(cover_deg):
-      this_level_verts = [Vertex( [ (e+(i*cover_deg), d) for (e,d) in v.edges] ) for v in self.V]
+      this_level_verts = [Vertex( [ (e+(i*nE), d) for (e,d) in v.edges] ) for v in self.V]
       new_verts.extend( this_level_verts )
-      this_level_edges = [Edge( e.source+(i*cover_deg), e.dest+(i*cover_deg), \
+      this_level_edges = [Edge( e.source+(i*nV), e.dest+(i*nV), \
                                 e.label_forward, e.label_backward ) for e in self.E]
       new_edges.extend( this_level_edges )
     
+    print "Constructed the disconnected cover"
+    print new_verts
+    print new_edges
+
     #now follow the path around, transposing levels as necessary
-    current_level = 0
+    current_level = hit_verts_and_times[-1][-1]  #the current level needs to start on the level of the final vertex
+    current_cover_edge = current_level*nE + path[0][0]
     for i,(e,d) in enumerate(path):
       dv,target_level = hit_verts_and_times[i]
-      if current_level == target_level: 
-        #if the level we're at is the level of the next vertex, do nothing
-        continue
-      #otherwise, we need to swap the edges on levels current_level and target_level
-      cover_e_ind = current_level*cover_deg + e
-      cover_oe_ind = target_level*cover_deg + e
-      cover_dv_ind = current_level*cover_deg + dv #this is where we would be going
-      cover_odv_ind = target_level*cover_deg + dv #this is where we want to go
-      if d:
-        new_edges[e_ind].dest = cover_odv_ind
-        new_edges[oe_ind.dest = cover_dv_ind
-        dv_edge_ind = new_verts[cover_dv_ind].index( (cover_e_ind, False) )
-        new_verts[cover_dv_ind].edges[ dv_edge_ind ] = (cover_oe_ind, False)
-        odv_edge_ind = new_verts[cover_odv_ind].index( (cover_oe.ind, False) )
-        new_verts[cover_odv_ind].edges[ odv_edge_ind ] = (cover_e_ind, False)
-      else:
-        new_edges[e_ind].source = cover_odv_ind
-        new_edges[oe_ind.source = cover_dv_ind
-        dv_edge_ind = new_verts[cover_dv_ind].index( (cover_e_ind, True) )
-        new_verts[cover_dv_ind].edges[ dv_edge_ind ] = (cover_oe_ind, True)
-        odv_edge_ind = new_verts[cover_odv_ind].index( (cover_oe.ind, True) )
-        new_verts[cover_odv_ind].edges[ odv_edge_ind ] = (cover_e_ind, True)
-      current_level = target_level
+      print "Current level: ", current_level
+      print "Index ",i," in the path, edge: ", (e,d), ", with vertex target: ", (dv,target_level)
+      print "Current cover edge: ", current_cover_edge
+
+      #otherwise, we need to swap the edges around
+      #this is the index in the vertex edge list 
+      v_e_index = self.V[dv].edges.index( (e, not d) )
+      #this is where we are currently headed
+      cover_dv_ind = (new_edges[current_cover_edge].dest if d else new_edges[current_cover_edge].source)
+      #this is where we *want* to be going
+      cover_odv_ind = target_level*nV + dv
+      #this is the index of the other covering edge
+      cover_oe_ind = new_verts[cover_odv_ind].edges[ v_e_index ][0]
+      
+      print "index in vert edge list: ", v_e_index
+      print "current dest vertex: ", cover_dv_ind
+      print "desired dest vertex: ", cover_odv_ind
+      print "other edge involded: ", cover_oe_ind
+      
+      if cover_dv_ind != cover_odv_ind:  #maybe we're lucky and don't have to do anything
+        if d:
+          new_edges[current_cover_edge].dest = cover_odv_ind
+          new_edges[cover_oe_ind].dest = cover_dv_ind
+        else:
+          new_edges[current_cover_edge].source = cover_odv_ind
+          new_edges[cover_oe_ind].source = cover_dv_ind
+        new_verts[cover_dv_ind].edges[ v_e_index ] = (cover_oe_ind, not d)
+        new_verts[cover_odv_ind].edges[ v_e_index ] = (current_cover_edge, not d)
+      
+      next_e,next_d = path[ (i+1)%len(path) ]
+      next_outgoing_v_e_index = self.V[dv].edges.index( (next_e, next_d) )
+      current_cover_edge = new_verts[cover_odv_ind].edges[ next_outgoing_v_e_index ][0]
+
     
     return Fatgraph(new_verts, new_edges)
     
@@ -896,7 +913,21 @@ def rose_plus_word(g, w):
   verts[0].edges[-3] = ((2*g-1)+len(w)-1, False)
   return Fatgraph(verts, edges)
   
+def fatgraph_from_order(O):
+  letters_to_edges = {}
+  E = []
+  for ell in O:
+    if ell.swapcase() in letters_to_edges:
+      i,d = letters_to_edges[ell.swapcase()]
+      letters_to_edges[ell] = (i, not d)
+    else:
+      letters_to_edges[ell] = (len(E), ell.islower())
+      E.append( Edge(0,0,ell.lower(),ell.upper()) )
 
+  V = [ Vertex([letters_to_edges[ell] for ell in O]) ]
+  return Fatgraph(V,E)
+  
+  
 
 
 
