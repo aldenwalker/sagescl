@@ -690,12 +690,61 @@ class Fatgraph:
   def cover_with_loops_embedded(self, path):
     """returns a fatgraph which covers self and which contains a lift of path 
     which is embedded"""
-    #find the vertices in the path, where they are, and how many times they are hit
-    verts_in_path = {}
+    #for the vertices in the path, record which time it's being hit
+    hit_verts_and_times = [(,) for _ in xrange(len(path))]
+    last_hit_time = {}
     for i,(e,d) in enumerate(path):
       dv = (self.E[e].dest if d else self.E[e].source)
-      verts_in_path[dv] = verts_in_path.get(dv,[]) + i
-    cover_deg = max([len(verts_in_path[v]) for v in verts_in_path])
+      if dv in last_hit_time:
+        hit_verts_and_times[i] = (dv, last_hit_time[dv]+1)
+        last_hit_time[dv] += 1
+      else:
+        hit_verts_and_times[i] = (dv,0)
+        last_hit_time[dv] = 0
+    cover_deg = max([x[-1] for x in hit_verts_and_times]) + 1
+    
+    #make the new vertex and edge lists
+    #this produces the disconnected n-fold cover
+    new_verts = []
+    new_edges = []
+    for i in xrange(cover_deg):
+      this_level_verts = [Vertex( [ (e+(i*cover_deg), d) for (e,d) in v.edges] ) for v in self.V]
+      new_verts.extend( this_level_verts )
+      this_level_edges = [Edge( e.source+(i*cover_deg), e.dest+(i*cover_deg), \
+                                e.label_forward, e.label_backward ) for e in self.E]
+      new_edges.extend( this_level_edges )
+    
+    #now follow the path around, transposing levels as necessary
+    current_level = 0
+    for i,(e,d) in enumerate(path):
+      dv,target_level = hit_verts_and_times[i]
+      if current_level == target_level: 
+        #if the level we're at is the level of the next vertex, do nothing
+        continue
+      #otherwise, we need to swap the edges on levels current_level and target_level
+      cover_e_ind = current_level*cover_deg + e
+      cover_oe_ind = target_level*cover_deg + e
+      cover_dv_ind = current_level*cover_deg + dv #this is where we would be going
+      cover_odv_ind = target_level*cover_deg + dv #this is where we want to go
+      if d:
+        new_edges[e_ind].dest = cover_odv_ind
+        new_edges[oe_ind.dest = cover_dv_ind
+        dv_edge_ind = new_verts[cover_dv_ind].index( (cover_e_ind, False) )
+        new_verts[cover_dv_ind].edges[ dv_edge_ind ] = (cover_oe_ind, False)
+        odv_edge_ind = new_verts[cover_odv_ind].index( (cover_oe.ind, False) )
+        new_verts[cover_odv_ind].edges[ odv_edge_ind ] = (cover_e_ind, False)
+      else:
+        new_edges[e_ind].source = cover_odv_ind
+        new_edges[oe_ind.source = cover_dv_ind
+        dv_edge_ind = new_verts[cover_dv_ind].index( (cover_e_ind, True) )
+        new_verts[cover_dv_ind].edges[ dv_edge_ind ] = (cover_oe_ind, True)
+        odv_edge_ind = new_verts[cover_odv_ind].index( (cover_oe.ind, True) )
+        new_verts[cover_odv_ind].edges[ odv_edge_ind ] = (cover_e_ind, True)
+      current_level = target_level
+    
+    return Fatgraph(new_verts, new_edges)
+    
+    
     
   
   def next_edge(self, current_edge, current_direction):
