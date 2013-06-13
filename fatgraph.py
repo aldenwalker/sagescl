@@ -288,90 +288,82 @@ class Fatgraph:
   
   def non_injective_pieces(self):
     
-    #first let's get a list of the incoming and outgoing letters for 
-    #every vertex
-    incoming_letters = len(self.unfolded_V)*[[]]
-    outgoing_letters = len(self.unfolded_V)*[[]]
-    for i,v in enumerate(self.unfolded_V):
-      outgoing_letters[i] = [(self.unfolded_E[ei].label_forward if edir else self.unfolded_E[ei].label_backward) for ei, edir in v.edges]
-      outgoing_letters[i] = list(set(outgoing_letters[i]))
-    incoming_letters = map(inverse, outgoing_letters)
-    
     rectangles = []
     
     #go through all the edges, and look at the original edges they carry
     #any pair of original edges they carry is a legitimate rectangle
-    #a rectangle is a pair ((e1, bool, w1), (e2,bool, w2)), where the bools
-    #record whether the edge is forward or backward, and the w's record 
-    #the three-letter word centered on the rectangle
+    #a rectangle is a pair ((e1, bool1, nbhd1), (e2,bool, nbhd2)), where the bools
+    #record whether the edge is forward or backward, and the nbhds's record
+    #the edges before and after
         
     for e in self.E:
       for i in xrange(len(e.carries_folded_edges)):
         e1 = e.carries_folded_edges[i]
         dir1 = (self.unfolded_E[e1].label_forward == e.label_forward)
-        e1letter = e.label_forward
         e1_ivert = (self.unfolded_E[e1].source if dir1 else self.unfolded_E[e1].dest)
         e1_dvert = (self.unfolded_E[e1].dest if dir1 else self.unfolded_E[e1].source)
-        preceeding_letter_ops1 = [ell for ell in incoming_letters[e1_ivert] if ell != inverse(e1letter)]
-        succeeding_letter_ops1 = [ell for ell in outgoing_letters[e1_dvert] if ell != inverse(e1letter)]
-        for j in xrange(i+1, len(e.carries_folded_edges)):
+        preceeding_edge_ops1 = [(eo, not do) for (eo,do) in self.unfolded_V[e1_ivert].edges if (eo,do) != (e1,dir1)]
+        succeeding_edge_ops1 = [(eo,do) for (eo,do) in self.unfolded_V[e1_dvert].edges if (eo,do) != (e1, not dir1)]
+
+        for j in xrange(len(e.carries_folded_edges)):
+          if j == i:
+            continue
           e2 = e.carries_folded_edges[j]
           dir2 = (self.unfolded_E[e2].label_forward != e.label_forward)
           e2letter = e.label_backward
           e2_ivert = (self.unfolded_E[e2].source if dir2 else self.unfolded_E[e2].dest)
           e2_dvert = (self.unfolded_E[e2].dest if dir2 else self.unfolded_E[e2].source)
-          preceeding_letter_ops2 = [ell for ell in incoming_letters[e2_ivert] if ell != inverse(e2letter)]
-          succeeding_letter_ops2 = [ell for ell in outgoing_letters[e2_dvert] if ell != inverse(e2letter)]
+          preceeding_edge_ops2 = [(eo, not do) for (eo,do) in self.unfolded_V[e2_ivert].edges if (eo,do) != (e2,dir2)]
+          succeeding_edge_ops2 = [(eo, do) for (eo,do) in self.unfolded_V[e2_dvert].edges if (eo,do) != (e2, not dir2)]
           #print (j,e2,dir2,e2letter,e2_ivert, e2_dvert)
           if e1_ivert == e2_dvert and e1_dvert == e2_ivert:
-            #this is a totally dummy rectangle; I guess add it twice
-            rectangles.append( ((e1, dir1, e1letter), (e2, dir2, e2letter)) )
-            #rectangles.append( ((e2, not dir2, inverse(e2letter)), (e1, not dir1, inverse(e1letter))) )
+            #this is a totally dummy rectangle;
+            rectangles.append( ((e1, dir1, (None, None)), (e2, dir2, (None, None))) )
+            
           elif e1_ivert == e2_dvert:
             #the first edge is a dummy edge; we only need to iterate over possible other letters
-            for s1 in succeeding_letter_ops1:
-              for p2 in preceeding_letter_ops2:
-                rectangles.append( ((e1, dir1, e1letter+s1), (e2, dir2, p2+e2letter)) )
-                rectangles.append( ((e2, not dir2, inverse(p2+e2letter)), (e1, not dir1, inverse(e1letter+s1))) )
+            for s1 in succeeding_edge_ops1:
+              for p2 in preceeding_edge_ops2:
+                rectangles.append( ((e1, dir1, (None, s1)), (e2, dir2, (p2, None))) )
+                
           elif e1_dvert == e2_ivert:
             #the second edge is a dummy edge; we only need to do the other letters
-            for p1 in preceeding_letter_ops1:
-              for s2 in succeeding_letter_ops2:
-                rectangles.append( ((e1, dir1, p1+e1letter), (e2, dir2, e2letter+s2)) )
-                rectangles.append( ((e2, not dir2, inverse(e2letter+s2)), (e1, not dir1, inverse(p1+e1letter))) )
+            for p1 in preceeding_edge_ops1:
+              for s2 in succeeding_edge_ops2:
+                rectangles.append( ((e1, dir1, (p1, None)), (e2, dir2, (None, s2))) )
+
           else:
             #both edges will be nontrivial; we need to look at all of them
-            for p1 in preceeding_letter_ops1:
-              for s1 in succeeding_letter_ops1:
-                for p2 in preceeding_letter_ops2:
-                  for s2 in succeeding_letter_ops2:
-                    rectangles.append( ((e1, dir1, p1+e1letter+s1), (e2, dir2, p2+e2letter+s2)) )
-                    rectangles.append( ((e2, not dir2, inverse(p2+e2letter+s2)), (e1, not dir1, inverse(p1+e1letter+s1))) )
+            for p1 in preceeding_edge_ops1:
+              for s1 in succeeding_edge_ops1:
+                for p2 in preceeding_edge_ops2:
+                  for s2 in succeeding_edge_ops2:
+                    rectangles.append( ((e1, dir1, (p1,s1)), (e2, dir2, (p2,s2))) )
     
-    #an edge is ( (v1, w1), (v2, w2) ), where the vi are unfolded vertices, 
-    #and the wi are pairs of letters which are incoming, outgoing
-    #the inverse of edge ((v1,w1),(v2,w2)) is ((v2,w2),(v1,w1))
+    #an edge is ( (v1, (i1,d1)), (v2, (i2,d2)) ), where the vi are unfolded vertices, 
+    #and the wi are pairs of edges which are incoming, outgoing to the vertices v1, v2
+    #the inverse of edge ((v1,(i1,d1)),(v2,(i2,d2))) is ((v2,(i2,d2)),(v1,(i1,d1)))
     #note, if v1 == v2, then we can cut the tree to reduce its size, so 
     #we may assume that v1 != v2
     #we will assume that v1 < v2 for uniqueness
     #also note, v1 and v2 have to be carried by the same folded vertex
     gluing_edges = []
-    ws = [[w11+w12 for w11 in incoming_letters[i] for w12 in outgoing_letters[i] if w12 != w11.swapcase()] for i in xrange(len(self.unfolded_V))]
+    ep = [ [ ((e1,not d1), (e2,d2)) for (e1, d1) in v.edges for (e2,d2) in v.edges if (e1,d1) != (e2,d2)] for v in self.unfolded_V]
     for i,v in enumerate(self.V):
       for j in v.carries_folded_verts:
         for k in v.carries_folded_verts:
           if k <= j:
             continue
-          for w1 in ws[j]:
-            for w2 in ws[k]:
-              gluing_edges.append( ((j,w1),(k,w2)) )
+          for ep1 in ep[j]:
+            for ep2 in ep[k]:
+              gluing_edges.append( ((j, ep1), (k,ep2)) )
     
     #this is an argument not to use C++:
     gluing_edge_index = dict([ (gluing_edges[i], i) for i in xrange(len(gluing_edges))])
     
     #now we must build the triangles
     #this is simply all triangles (triple of distinct vertices-plus-words)
-    #a triangle is a triple ((v1,w1), (v2, w2), (v2,w3))
+    #a triangle is a triple ((v1,ep1), (v2, ep2), (v2,ep3))
     #all vertices of the triangle are unique (otherwise we could reduce the tree)
     #and all vertices must be carried by the same folded vertex
     triangles = []
@@ -383,28 +375,29 @@ class Fatgraph:
           for k in v.carries_folded_verts:
             if k <= i or k==j:
               continue
-            for w1 in ws[i]:
-              for w2 in ws[j]:
-                for w3 in ws[k]:
-                  triangles.append( ((i,w1),(j,w2),(k,w3)) )
+            for ep1 in ep[i]:
+              for ep2 in ep[j]:
+                for ep3 in ep[k]:
+                  triangles.append( ((i,ep1),(j,ep2),(k,ep3)) )
     
     return rectangles, gluing_edges, triangles
     
   def rectangle_boundary(self, r):
-    """returns the boundary of a rectangle, as a tuple of two edges"""
-    ((e1, dir1, w1), (e2, dir2, w2)) = r
+    """returns the boundary of a rectangle, as a tuple of two gluing edges"""
+    ((e1, dir1, ep1), (e2, dir2, ep2)) = r
     v11 = (self.unfolded_E[e1].source if dir1 else self.unfolded_E[e1].dest)
     v12 = (self.unfolded_E[e1].dest if dir1 else self.unfolded_E[e1].source)
     v21 = (self.unfolded_E[e2].source if dir2 else self.unfolded_E[e2].dest)
     v22 = (self.unfolded_E[e2].dest if dir2 else self.unfolded_E[e2].source)
 
-    edge1 = ( ((v22,w2[-2:]),(v11,w1[:2])) if v11 != v22 else (None, v11))
-    edge2 = ( ((v12,w1[-2:]),(v21,w2[:2])) if v21 != v12 else (None, v21))
-    return (edge1, edge2)
+    ge1 = ( (v22, ((e2, dir2), ep2[1])), (v11, (ep1[0], (e1,dir1))) )
+    ge2 = ( (v12, ((e1, dir1), ep1[1])), (v21, (ep2[0], (e2,dir2))) )
+
+    return (ge1, ge2)
   
   def rectangle_verts(self, r):
     """returns a list (potentially with dupes) of the vertices in a rectangle"""
-    ((e1, dir1, w1), (e2, dir2, w2)) = r
+    ((e1, dir1, ep1), (e2, dir2, ep2)) = r
     v11 = (self.unfolded_E[e1].source if dir1 else self.unfolded_E[e1].dest)
     v12 = (self.unfolded_E[e1].dest if dir1 else self.unfolded_E[e1].source)
     v21 = (self.unfolded_E[e2].source if dir2 else self.unfolded_E[e2].dest)
@@ -455,10 +448,10 @@ class Fatgraph:
     lf = 0
     for i,r in enumerate(R):
       coef = 0
-      edge1, edge2 = self.rectangle_boundary(r)
-      if edge1[0] == None:
+      ge1, ge2 = self.rectangle_boundary(r)
+      if ge1[0][1][1] == None:
         coef += 1
-      if edge2[0] == None:
+      if ge2[0][1][1] == None:
         coef += 1
       if coef > 0:
         lf += coef*x[i]
@@ -537,9 +530,10 @@ class Fatgraph:
       cur_piece_ind = start_index
       kind,p = pieces[cur_piece_ind]
       while True:
-        print "Boundary: ",boundary
-        print "Edge list: ", edge_list
-        print "cur_piece_ind, cur_ind_in_piece, kind, p: ", cur_piece_ind, cur_ind_in_piece, kind, p
+        if verbose>0:
+          print "Boundary: ",boundary
+          print "Edge list: ", edge_list
+          print "cur_piece_ind, cur_ind_in_piece, kind, p: ", cur_piece_ind, cur_ind_in_piece, kind, p
         #read off the boundary label, and figure out what the outgoing edge is
         have_visted_piece[cur_piece_ind] = True
         if kind=='r':
@@ -554,7 +548,7 @@ class Fatgraph:
           outgoing_edge = (p[(cur_ind_in_piece+1)%3], p[(cur_ind_in_piece+2)%3])
         
         #get the matching edge to the outgoing edge (if it's a dummy each, turn around)
-        if outgoing_edge[0] == None:
+        if outgoing_edge[0][1][1] == None:
           next_kind = 'r'
           next_p = p
           outgoing_edge_inv = outgoing_edge
@@ -687,9 +681,9 @@ class Fatgraph:
     return new_F
     
   
-  def cover_with_loops_embedded(self, path):
+  def cover_with_loops_embedded(self, path, verbose=0):
     """returns a fatgraph which covers self and which contains a lift of path 
-    which is embedded"""
+    which is embedded, also returns the lifted path"""
     #for the vertices in the path, record which time it's being hit
     hit_verts_and_times = [0 for _ in xrange(len(path))]
     last_hit_time = {}
@@ -716,18 +710,21 @@ class Fatgraph:
                                 e.label_forward, e.label_backward ) for e in self.E]
       new_edges.extend( this_level_edges )
     
-    print "Constructed the disconnected cover"
-    print new_verts
-    print new_edges
+    if verbose>0:
+      print "Constructed the disconnected cover"
+      print new_verts
+      print new_edges
 
     #now follow the path around, transposing levels as necessary
     current_level = hit_verts_and_times[-1][-1]  #the current level needs to start on the level of the final vertex
     current_cover_edge = current_level*nE + path[0][0]
+    cover_edge_path = [(current_cover_edge,path[0][1])]
     for i,(e,d) in enumerate(path):
       dv,target_level = hit_verts_and_times[i]
-      print "Current level: ", current_level
-      print "Index ",i," in the path, edge: ", (e,d), ", with vertex target: ", (dv,target_level)
-      print "Current cover edge: ", current_cover_edge
+      if verbose>0:
+        print "Current level: ", current_level
+        print "Index ",i," in the path, edge: ", (e,d), ", with vertex target: ", (dv,target_level)
+        print "Current cover edge: ", current_cover_edge
 
       #otherwise, we need to swap the edges around
       #this is the index in the vertex edge list 
@@ -739,10 +736,11 @@ class Fatgraph:
       #this is the index of the other covering edge
       cover_oe_ind = new_verts[cover_odv_ind].edges[ v_e_index ][0]
       
-      print "index in vert edge list: ", v_e_index
-      print "current dest vertex: ", cover_dv_ind
-      print "desired dest vertex: ", cover_odv_ind
-      print "other edge involded: ", cover_oe_ind
+      if verbose>0:
+        print "index in vert edge list: ", v_e_index
+        print "current dest vertex: ", cover_dv_ind
+        print "desired dest vertex: ", cover_odv_ind
+        print "other edge involded: ", cover_oe_ind
       
       if cover_dv_ind != cover_odv_ind:  #maybe we're lucky and don't have to do anything
         if d:
@@ -757,9 +755,10 @@ class Fatgraph:
       next_e,next_d = path[ (i+1)%len(path) ]
       next_outgoing_v_e_index = self.V[dv].edges.index( (next_e, next_d) )
       current_cover_edge = new_verts[cover_odv_ind].edges[ next_outgoing_v_e_index ][0]
+      cover_edge_path.append((current_cover_edge,d))
 
     
-    return Fatgraph(new_verts, new_edges)
+    return (Fatgraph(new_verts, new_edges), cover_edge_path)
     
     
     
