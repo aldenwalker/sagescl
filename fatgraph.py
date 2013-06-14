@@ -188,8 +188,29 @@ class Fatgraph:
       outgoing_labels[ol] = i
     return None
   
-  def fold(self, verbose=False): 
-    """returns the folded version of the fatgraph, with the folded structure"""
+  def unfolded_fatgraph_edge_pair(self, v_ind):
+    """returns an ordered, consecutive pair of edge indices which have the same outgoing label"""
+    lve = len(self.V[v_ind].edges)
+    for i,(e1,d1) in enumerate(self.V[v_ind].edges):
+      (e2,d2) = self.V[v_ind].edges[(i+1)%lve]
+      ol1 = (self.E[e1].label_forward if d1 else self.E[e1].label_backward)
+      ol2 = (self.E[e2].label_forward if d2 else self.E[e2].label_backward)
+      if ol1 == ol2:
+        #we need to check that they either go to different vertices or
+        #are adjacent 
+        ovi1 = (self.E[e1].dest if d1 else self.E[e1].source)
+        ovi2 = (self.E[e2].dest if d2 else self.E[e2].source)
+        if ovi1 != ovi2:
+          return (i, (i+1)%lve)
+        ov_e1_ind = self.V[ovi1].edges.index( (e1, not d1) )
+        ov_e2_ind = self.V[ovi1].edges.index( (e2, not d2) )
+        if ov_e1_ind == (ov_e2_ind+1)%len(self.V[ovi1].edges):
+          return (i, (i+1)%lve)
+    return None
+  
+  def fold(self, fatgraph_fold=False, verbose=False): 
+    """returns the folded version of the fatgraph, with the folded structure; 
+    if fatgraph_fold=True, only do fatgraph (surface) folds"""
     #initialize the new folded fatgraph
     new_F = Fatgraph(copy.deepcopy(self.V), copy.deepcopy(self.E))
     new_F.unfolded_V = copy.deepcopy(self.V)
@@ -210,7 +231,10 @@ class Fatgraph:
       for i in xrange(len(new_F.V)):
         if hasattr(new_F.V[i], 'dead'):
           continue
-        unfolded_e_p = new_F.unfolded_edge_pair(i)
+        if fatgraph_fold:
+          unfolded_e_p = new_F.unfolded_fatgraph_edge_pair(i)
+        else:
+          unfolded_e_p = new_F.unfolded_edge_pair(i)
         if unfolded_e_p != None:
           unfolded_vert = i
           break
@@ -223,44 +247,65 @@ class Fatgraph:
       #fold the edges together
       i1, i2 = unfolded_e_p
       v = new_F.V[unfolded_vert]
-      e1, e2 = new_F.E[v.edges[i1][0]], new_F.E[v.edges[i2][0]]
+      ei1, d1 = v.edges[i1]
+      ei2, d2 = v.edges[i2]
+      e1, e2 = new_F.E[ei1], new_F.E[ei2]
       e1.carries_folded_edges.extend(e2.carries_folded_edges)
       e2.dead = True
       
       if verbose:
         print "This is edges with main indices ", v.edges[i1], ' and ', v.edges[i2]
       
-      #fold the vertices together    
-      other_vert_1 = (e1.dest if v.edges[i1][1] else e1.source)
-      other_vert_2 = (e2.dest if v.edges[i2][1] else e2.source)
+      #get the other vertices 
+      ovi1 = (e1.dest if v.edges[i1][1] else e1.source)
+      ovi2 = (e2.dest if v.edges[i2][1] else e2.source)
+      ov1, ov2 = new_F.V[ovi1], new_F.V[ovi2]
       
       if verbose:
-        print "The vertices to fold together are ", other_vert_1, ' and ', other_vert_2
+        print "The vertices to fold together are ", ovi1, ' and ', ovi2
       
-      other_vert_2_ind = new_F.V[other_vert_2].find_edge_ind(v.edges[i2][0], not v.edges[i2][1])
-      if unfolded_vert == other_vert_2:
-        #we need to erase both v.edges[i2] and v.edges[other_vert_2_ind]
-        del v.edges[max(i2, other_vert_2_ind)]
-        del v.edges[min(i2, other_vert_2_ind)]
-      else:
-        del v.edges[i2]
-        del new_F.V[other_vert_2].edges[other_vert_2_ind]
+      #remove edge 2 altogether
+      #note we remove the origin first, *then* the destination, and we 
+      #remember the destination index.  This ensure we know where to glue 
+      #the edges from vertex 1
+      del v.edges[i2]
+      ov2_e_ind = ov2.edges.index( (ei2, not d2) )
+      
+      if ovi1 != ovi2:
+        #get a list of the edges that are in vertex 2, and in the 
+        #correct order!
+        edges_from_vert_2 = ov2.edges[ov2_e_ind+1:] \
+                          + ov2.edges[:ov2_e_ind]
         
-      if other_vert_1 != other_vert_2:
-        for i in xrange(len(new_F.V[other_vert_2].edges)):
-          ei = new_F.V[other_vert_2].edges[i]
-          if ei[1]:
-            new_F.E[ei[0]].source = other_vert_1
+        #for all these edges, make sure they point to the right place
+        for (et, dt) in edges_from_vert_2:
+          if dt:
+            new_F.E[et].source = ovi1
           else:
-            new_F.E[ei[0]].dest = other_vert_1
-        new_F.V[other_vert_1].edges.extend(new_F.V[other_vert_2].edges)
-        new_F.V[other_vert_1].carries_folded_verts.extend(new_F.V[other_vert_2].carries_folded_verts)
-        new_F.V[other_vert_2].dead = True
+            new_F.E[et].dest = ovi1
+        
+        #get the index in vertex 1 
+        ov1_e_ind = ov1.edges.index( (ei1, not d1) )
+        
+        #place the edges from vertex 2 in order, in *front* of this index
+        ov1.edges = ov1.edges[:ov1_e_ind] \
+                  + edges_from_vert_2      \
+                  + ov1.edges[ov1_e_ind:]
+        
+        #extend the list of vertices that other vert 1 is carrying
+        ov1.carries_folded_verts.extend(ov2.carries_folded_verts)
+        
+        #kill vertex 2
+        ov2.dead = True
+      
+      else: #if ov1 == ov2, then we don't need to get rid of vertex 2 -- just delete the incoming location
+        del ov2.edges[ov2_e_ind]
     
     #the graph is folded now, but we need to clean it up
     new_F.cleanup()
     return new_F
-    
+      
+  
   
   def non_injective_rectangles(self):
     """for a folded fatgraph, returns the rectangles
@@ -477,7 +522,11 @@ class Fatgraph:
       if verbose > 1:
         p.show()
      
-    obj_L1 = p.solve()
+    try:
+      obj_L1 = p.solve()
+    except :
+      print "LP Error (probably no kernel)"
+      return None
     x_solution = p.get_values(x)
     
     
@@ -718,11 +767,13 @@ class Fatgraph:
     #now follow the path around, transposing levels as necessary
     current_level = hit_verts_and_times[-1][-1]  #the current level needs to start on the level of the final vertex
     current_cover_edge = current_level*nE + path[0][0]
-    cover_edge_path = [(current_cover_edge,path[0][1])]
+    cover_edge_path = []
     for i,(e,d) in enumerate(path):
       dv,target_level = hit_verts_and_times[i]
+      cover_edge_path.append((current_cover_edge, d))
       if verbose>0:
-        print "Current level: ", current_level
+        print "Current fatgraph: "
+        print Fatgraph(new_verts, new_edges)
         print "Index ",i," in the path, edge: ", (e,d), ", with vertex target: ", (dv,target_level)
         print "Current cover edge: ", current_cover_edge
 
@@ -742,7 +793,7 @@ class Fatgraph:
         print "desired dest vertex: ", cover_odv_ind
         print "other edge involded: ", cover_oe_ind
       
-      if cover_dv_ind != cover_odv_ind:  #maybe we're lucky and don't have to do anything
+      if cover_dv_ind != cover_odv_ind:  #maybe we're lucky and don't have to do anything, so we can skip this
         if d:
           new_edges[current_cover_edge].dest = cover_odv_ind
           new_edges[cover_oe_ind].dest = cover_dv_ind
@@ -755,7 +806,6 @@ class Fatgraph:
       next_e,next_d = path[ (i+1)%len(path) ]
       next_outgoing_v_e_index = self.V[dv].edges.index( (next_e, next_d) )
       current_cover_edge = new_verts[cover_odv_ind].edges[ next_outgoing_v_e_index ][0]
-      cover_edge_path.append((current_cover_edge,d))
 
     
     return (Fatgraph(new_verts, new_edges), cover_edge_path)
