@@ -9,6 +9,8 @@ import copy
 
 def approx_rat(x, tol=0.0000001):
   """returns a rational approximation which is closer than tol"""
+  if abs(x) < tol:
+    return Integer(0)
   c = continued_fraction_list(x, partial_convergents=True, nterms=10)
   for r in c[1]:
     if abs(Integer(r[0])/r[1] - x) < tol:
@@ -122,6 +124,21 @@ class Fatgraph:
       
     return ans
   
+  def write_file_new(self, filename):
+    f = open(filename, 'w')
+    f.write(str(len(self.V)) + ' ' + str(len(self.E)) + '\n')
+    for v in self.V:
+      f.write(str(len(v.edges)))
+      for (e,d) in v.edges:
+        signed_ind = (e+1 if d else -(e+1))
+        f.write(' ' + str(signed_ind))
+      f.write('\n')
+    for e in self.E:
+      f.write( str(e.source) + ' ' + str(e.dest) + ' ' + e.label_forward + ' ' + e.label_backward + '\n')
+    f.close()
+    
+    
+  
   def outgoing_labels(self, ind):
     edges = self.V[ind].edges
     ans = []
@@ -207,6 +224,15 @@ class Fatgraph:
         if ov_e1_ind == (ov_e2_ind+1)%len(self.V[ovi1].edges):
           return (i, (i+1)%lve)
     return None
+  
+  def is_folded(self, fatgraph_folded=False):
+    for i in xrange(len(self.V)):
+      if (not fatgraph_folded) and self.unfolded_edge_pair(i) != None:
+        return False
+      elif fatgraph_folded and self.unfolded_fatgraph_edge_pair(i) != None:
+        return False
+    return True      
+    
   
   def fold(self, fatgraph_fold=False, verbose=False): 
     """returns the folded version of the fatgraph, with the folded structure; 
@@ -331,7 +357,7 @@ class Fatgraph:
     return rectangles
   
   
-  def non_injective_pieces(self):
+  def non_injective_pieces(self, do_triangles=True):
     
     rectangles = []
     
@@ -412,6 +438,9 @@ class Fatgraph:
     #all vertices of the triangle are unique (otherwise we could reduce the tree)
     #and all vertices must be carried by the same folded vertex
     triangles = []
+    if not do_triangles:
+      return rectangles, gluing_edges, triangles
+    
     for v in self.V:
       for i in v.carries_folded_verts:
         for j in v.carries_folded_verts:
@@ -449,10 +478,15 @@ class Fatgraph:
     v22 = (self.unfolded_E[e2].dest if dir2 else self.unfolded_E[e2].source)
     return ([v11,v22] if v11!=v22 else [v11]) + ([v12,v21] if v12!=v21 else [v12])
   
-  def kernel_element(self, required_vert=None, verbose=0):
+  def kernel_element(self, required_vert=None, do_triangles=True, verbose=0):
     """return an element in the kernel"""
     #we do a linear programming problem
-    R, GE, T = self.non_injective_pieces()
+    R, GE, T = self.non_injective_pieces(do_triangles=do_triangles)
+    
+    if verbose>0:
+      print "Got pieces"
+      sys.stdout.flush()
+    
     #there's a column for every rectangle and triangle
     num_rects = len(R)
     num_triangles = len(T)
@@ -467,25 +501,66 @@ class Fatgraph:
     #the objective is L1 norm on the rectangles
     p.set_objective( p.sum([x[i] for i in xrange(num_rects)]) )
     
-    #for each edge, add the constraint
-    #notice that every triangle and rectangle cannot contain an edge more than once
-    #so it contributes only -1, 0,or 1
-    for e in GE:
-      lf = 0
-      eb = (e[1], e[0])
-      for i,r in enumerate(R):
-        rbound = self.rectangle_boundary(r)
-        if e in rbound:
-          lf += x[i]
-        elif eb in rbound:
-          lf += (-1)*x[i]
-      for i,t in enumerate(T):
-        if e in t:
-          lf += x[num_rects + i]
-        elif eb in t:
-          lf += (-1)*v[num_rects + i]
-      p.add_constraint(lf, min=0, max=0)
+    ##for each edge, add the constraint
+    ##notice that every triangle and rectangle cannot contain an edge more than once
+    ##so it contributes only -1, 0,or 1
+    #for e in GE:
+      #lf = 0
+      #eb = (e[1], e[0])
+      #for i,r in enumerate(R):
+        #rbound = self.rectangle_boundary(r)
+        #if e in rbound:
+          #lf += x[i]
+        #elif eb in rbound:
+          #lf += (-1)*x[i]
+      #for i,t in enumerate(T):
+        #if e in t:
+          #lf += x[num_rects + i]
+        #elif eb in t:
+          #lf += (-1)*v[num_rects + i]
+      #p.add_constraint(lf, min=0, max=0)
     
+    #build a dict which tells us what the index of an edge is
+    GE_index = dict([ (GE[i], i) for i in xrange(len(GE))])
+    #get a linear function for every edge
+    lfs = [0 for _ in GE]
+    #go through the rectangles
+    for i,r in enumerate(R):
+      (vep11, vep12), (vep21, vep22) = self.rectangle_boundary(r)
+      if vep11[1][1] != None: # make sure it's not a dummy edge
+        #determine whether to add +/-:
+        if vep11[0] < vep12[0]:
+          lfs[ GE_index[(vep11, vep12)] ] += x[i]
+        else:
+          lfs[ GE_index[(vep12, vep11)] ] += (-1)*x[i]
+      if vep21[1][1] != None: # make sure it's not a dummy edge
+        #determine whether to add +/-:
+        if vep21[0] < vep22[0]:
+          lfs[ GE_index[(vep21, vep22)] ] += x[i]
+        else:
+          lfs[ GE_index[(vep22, vep21)] ] += (-1)*x[i]
+    
+    if verbose>0:
+      print "Going through triangles"
+      sys.stdout.flush()
+    
+    #go through the triangles
+    for i,t in enumerate(T):
+      for j in xrange(3):
+        (v1, ep1), (v2, ep2) = t[j], t[(j+1)%3]
+        if v1<v2:
+          lfs[ GE_index[ ((v1, ep1), (v2, ep2)) ] ] += x[num_rects + i]
+        else:
+          lfs[ GE_index[ ((v2, ep2), (v1, ep1)) ] ] += (-1)*x[num_rects + i]
+      
+    if verbose>0:
+      print "Done with triangles"
+      sys.stdout.flush()    
+    
+    #now add the linear functions
+    for lf in lfs:
+      p.add_constraint(lf, min=0, max=0)
+  
     #also add the constraint that chi=1
     #here, triangles contribute -(1/2), normal rectangles contribute 0, 
     #and rectangles with an open end constribute 1/2
@@ -517,7 +592,7 @@ class Fatgraph:
       p.add_constraint(lf, min=2)
       
     if verbose > 0:
-      print "Done creating LP."
+      print "Done creating LP"
       sys.stdout.flush()
       if verbose > 1:
         p.show()
@@ -529,6 +604,9 @@ class Fatgraph:
       return None
     x_solution = p.get_values(x)
     
+    if verbose>0:
+      print "Done solving"
+      sys.stdout.flush()
     
     #now we can assemble the pieces to obtain an actual tree
     #first, we clear denominators (unecessary?), taking an integer number 
