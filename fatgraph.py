@@ -137,8 +137,6 @@ class Fatgraph:
       f.write( str(e.source) + ' ' + str(e.dest) + ' ' + e.label_forward + ' ' + e.label_backward + '\n')
     f.close()
     
-    
-  
   def outgoing_labels(self, ind):
     edges = self.V[ind].edges
     ans = []
@@ -148,6 +146,36 @@ class Fatgraph:
       else:
         ans.append( self.E[i].label_backward )
     return ans
+  
+  def path_has_good_partition(self, vi, paths_in):
+    """determine if the parts of the path passing through vert vi
+    can be broken up into a good collection"""
+    paths = copy.deepcopy(paths_in)
+    if type(paths[0]) == tuple:
+      paths = [paths]
+    
+    #find all the places where the paths pass through vertex vi
+    pass_thru_edges = []
+    for i,path in enumerate(paths):
+      for j,(ei,d) in enumerate(path):
+        dvi = (self.E[e].dest if d else self.E[e].source)
+        if dvi == vi:
+          pass_thru_edges.append( (i,j) )
+    
+    #for every pair of pass-thru-edges, determine if they can be connected
+    #(can they be placed on the same level?)
+    connectivity_edges = []
+    for i1, (pi1, i_in_p1) in enumerate(pass_thru_edges):
+      for i2, (pi2, i_in_p2) in list(enumerate(pass_thru_edges))[i1:]:
+        if not self.do_paths_cross(paths, (pi1, i_in_p1), (pi2, i_in_p2)):
+          connectivity_edges.append( (i1,i2) )
+    
+    #now we need to find a set of cliques so that 
+    #everything appears the same number of times.
+    #I think it's enough just to find cliques that contain everything?
+    
+  
+  
   
   def cleanup(self):
     """removes dead edges and vertices (it's an error if they are not actually dead)"""
