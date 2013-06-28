@@ -171,8 +171,11 @@ class Fatgraph:
           connectivity_edges.append( (i1,i2) )
     
     #now we need to find a set of cliques so that 
-    #everything appears the same number of times.
-    #I think it's enough just to find cliques that contain everything?
+    # 1) each ok pass_thru_edge appears once
+    # 2) every other pass_thru_edge appears at least once
+    ok_graph = Graph(connectivity_edges)
+    cliques = ok_graph.cliques_maximal()
+    
     
   
   
@@ -671,7 +674,7 @@ class Fatgraph:
     #now we trace out the boundary
     #we start at some location, and follow the edges
     #the result is a list of edges with signs
-    have_visted_piece = [False for i in xrange(num_rect_pieces)]
+    have_visted_piece = [False for i in xrange(len(pieces))]
     boundaries = []
     while True:
       #find an unvisited piece 
@@ -721,7 +724,7 @@ class Fatgraph:
           else:
             next_ind_in_piece = 1
         else:
-          next_ind_in_piece = next_p.index( outgoing_edge_inv )
+          next_ind_in_piece = next_p.index( outgoing_edge_inv[0] )
         
         if next_piece_ind == start_index and next_ind_in_piece == 0: 
           #we're done
