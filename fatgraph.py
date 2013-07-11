@@ -1085,7 +1085,13 @@ def fatgraph_from_order(O):
   V = [ Vertex([letters_to_edges[ell] for ell in O]) ]
   return Fatgraph(V,E)
   
-  
+def free_map_kernel(target_words):
+  #build a fatgraph which is just a bunch of loops
+  #labeled by the target_words
+  V = [ Vertex([]) ]
+  E = []
+
+
 
 
 
