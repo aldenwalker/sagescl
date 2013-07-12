@@ -180,7 +180,7 @@ class Fatgraph:
   
   
   
-  def cleanup(self):
+  def cleanup(self, maintain_watch_edges=False):
     """removes dead edges and vertices (it's an error if they are not actually dead)"""
     #figure out where the edges and vertices will go
     dest_edges = range(len(self.E))
@@ -222,19 +222,37 @@ class Fatgraph:
       self.V[dest_verts[i]] = self.V[i]
     del self.E[num_edges:]
     del self.V[num_verts:]
+    
+    if maintain_watch_edges:
+      self.watch_edges = [[dest_edges[w] for w in W] for W in self.watch_edges]
   
   
-  def unfolded_edge_pair(self, v_ind):
+  def unfolded_edge_pair(self, v_ind, maintain_watch_edges=False):
     """returns a pair of edge indices which have the same outgoing label,
        or None if no such pair exists"""
-    outgoing_labels = {}
-    for i in xrange(len(self.V[v_ind].edges)):
-      edge_ind, edge_dir = self.V[v_ind].edges[i]
-      ol = (self.E[edge_ind].label_forward if edge_dir else self.E[edge_ind].label_backward)
-      if ol in outgoing_labels:
-        return (outgoing_labels[ol], i)
-      outgoing_labels[ol] = i
-    return None
+    if not maintain_watch_edges:
+      outgoing_labels = {}
+      for i in xrange(len(self.V[v_ind].edges)):
+        edge_ind, edge_dir = self.V[v_ind].edges[i]
+        ol = (self.E[edge_ind].label_forward if edge_dir else self.E[edge_ind].label_backward)
+        if ol in outgoing_labels:
+          return (outgoing_labels[ol], i)
+        outgoing_labels[ol] = i
+      return None
+    else:
+      outgoing_labels = {}
+      for i in xrange(len(self.V[v_ind].edges)):
+        edge_ind, edge_dir = self.V[v_ind].edges[i]
+        #if edge_ind is the last edge in its watch list, then we can't 
+        #fold it
+        wli = self.watch_edges_dict[edge_ind]
+        if self.watch_edges[wli] == [edge_ind]:
+          continue
+        ol = (self.E[edge_ind].label_forward if edge_dir else self.E[edge_ind].label_backward)
+        if ol in outgoing_labels:
+          return (outgoing_labels[ol], i)
+        outgoing_labels[ol] = i
+      return None
   
   def unfolded_fatgraph_edge_pair(self, v_ind):
     """returns an ordered, consecutive pair of edge indices which have the same outgoing label"""
@@ -265,9 +283,11 @@ class Fatgraph:
     return True      
     
   
-  def fold(self, fatgraph_fold=False, verbose=False): 
+  def fold(self, fatgraph_fold=False, maintain_watch_edges=False, verbose=False): 
     """returns the folded version of the fatgraph, with the folded structure; 
-    if fatgraph_fold=True, only do fatgraph (surface) folds"""
+    if fatgraph_fold=True, only do fatgraph (surface) folds
+    if maintain_watch_edges!=None, it should be a list of lists of edge indices, 
+    and it'll fold, but it'll refuse to fold up the last of a watch edge list"""
     #initialize the new folded fatgraph
     new_F = Fatgraph(copy.deepcopy(self.V), copy.deepcopy(self.E))
     new_F.unfolded_V = copy.deepcopy(self.V)
@@ -277,6 +297,11 @@ class Fatgraph:
     for i in xrange(len(new_F.E)):
       new_F.E[i].carries_folded_edges = [i]
     
+    #initialize the watch list, if necessary
+    if maintain_watch_edges:
+      new_F.watch_edges = copy.deepcopy(self.watch_edges)
+      new_F.watch_edges_dict = dict( [ (x,i) for i in xrange(len(new_F.watch_edges)) for x in new_F.watch_edges[i]] )
+
     while True:
       if verbose:
         print "Current fatgraph: "
@@ -291,7 +316,8 @@ class Fatgraph:
         if fatgraph_fold:
           unfolded_e_p = new_F.unfolded_fatgraph_edge_pair(i)
         else:
-          unfolded_e_p = new_F.unfolded_edge_pair(i)
+          unfolded_e_p = new_F.unfolded_edge_pair(i, maintain_watch_edges=maintain_watch_edges)
+            
         if unfolded_e_p != None:
           unfolded_vert = i
           break
@@ -309,6 +335,25 @@ class Fatgraph:
       e1, e2 = new_F.E[ei1], new_F.E[ei2]
       e1.carries_folded_edges.extend(e2.carries_folded_edges)
       e2.dead = True
+      
+      #if we're maintaining watch edges, then we need to 
+      #remove the folded edges from the watch lists
+      if maintain_watch_edges:
+        wli1 = new_F.watch_edges_dict[ei1]
+        wli2 = new_F.watch_edges_dict[ei2]
+        if ei1 in new_F.watch_edges[wli1]:
+          new_F.watch_edges[wli1].remove(ei1)        
+          if verbose:
+            print "Removing edge ", ei1, " from watch list ", wli1
+        elif verbose:
+          print "Didn't need to remove ", ei1, " from watch list ", wli1
+        if ei2 in new_F.watch_edges[wli2]:
+          new_F.watch_edges[wli2].remove(ei2)
+          if verbose:
+            print "Removing edge ", ei2, " from watch list ", wli2
+        elif verbose:
+          print "Didn't need to remove ", ei2, " from watch list ", wli2
+          
       
       if verbose:
         print "This is edges with main indices ", v.edges[i1], ' and ', v.edges[i2]
@@ -359,7 +404,7 @@ class Fatgraph:
         del ov2.edges[ov2_e_ind]
     
     #the graph is folded now, but we need to clean it up
-    new_F.cleanup()
+    new_F.cleanup(maintain_watch_edges=maintain_watch_edges)
     return new_F
       
   
@@ -1085,11 +1130,61 @@ def fatgraph_from_order(O):
   V = [ Vertex([letters_to_edges[ell] for ell in O]) ]
   return Fatgraph(V,E)
   
-def free_map_kernel(target_words):
+def free_map_kernel(target_words, verbose=0):
   #build a fatgraph which is just a bunch of loops
   #labeled by the target_words
   V = [ Vertex([]) ]
   E = []
+  watch_edges = []
+  #for each word, 
+  for w in target_words:
+    watch_edges.append([])
+    for i in xrange(len(w)):
+      this_edge_ind = len(E)
+      E.append( Edge( -1, -1, w[i], inverse(w[i]) ) )
+      if i == 0:
+        prev_vert_ind = 0
+        V[0].edges.append( (this_edge_ind, True) )
+      else:
+        prev_vert_ind = len(V)-1
+        V[prev_vert_ind].edges.append( (this_edge_ind, True) )
+      if i == len(w)-1:
+        next_vert_ind = 0
+        V[0].edges.append( (this_edge_ind, False) )
+      else:
+        next_vert_ind = len(V)
+        V.append( Vertex( [ (this_edge_ind, False) ] ) )
+      E[-1].source = prev_vert_ind
+      E[-1].dest = next_vert_ind
+      watch_edges[-1].append(this_edge_ind)
+  G = Fatgraph(V,E)
+  #first, fold it, while maintaining at least one edge in each loop by itself
+  G.watch_edges = watch_edges
+  G = G.fold(maintain_watch_edges=True)
+  new_watch_edges = [w[0] for w in G.watch_edges]
+  #now we have created the graph; find something in the kernel
+  H = G.fold()
+  K = H.kernel_element(verbose=verbose)
+  kernel_edge_list = K[0][0]
+  #read off the word in the source gens
+  #the source gens will be x,y,z,w if there's <= 4, or x1, x2, ... if more
+  if len(target_words) <= 4:
+    gens = ['x','y','z','w'][:len(target_words)]
+  else:
+    gens = ['x' + str(i) for i in xrange(len(target_words))]
+  ker_word = []
+  trivial_word = []
+  for (e,d) in kernel_edge_list:
+    if e in new_watch_edges:
+      gen_ind = new_watch_edges.index(e)
+      if d:
+        ker_word.append( gens[ gen_ind ] )
+        trivial_word.append( target_words[ gen_ind ] )
+      else:
+        ker_word.append( gens[ gen_ind ].swapcase() )
+        trivial_word.append( inverse(target_words[ gen_ind ]) )
+  return ''.join(ker_word), K[0][1]
+  
 
 
 
