@@ -18,6 +18,23 @@ def approx_rat(x, tol=0.0000001):
   return None
     
 
+def gen_reduce(W_in):
+  """reduces a list of the form [(i1,s1), (i2,s2), ...]
+  by cancelling whenever we find i1==i2 and s1 = -s2"""
+  W = copy.deepcopy(W_in)
+  i = 0
+  while i < len(W)-1:
+    i1,s1 = W[i]
+    i2,s2 = W[i+1]
+    if i1 == i2 and s1 == -s2:
+      del W[i]
+      del W[i]
+      if i>0:
+        i -= 1
+    else:
+      i += 1
+  return W
+
 
 
 class Edge:
@@ -28,6 +45,13 @@ class Edge:
     self.label_backward = Lb
     self.carries_folded_edges = None
     self.carried_by_edge = None
+    #the following records the list of (index, True=positive) pairs for 
+    #generators of pi_1(F).  This is used while folding to find normal 
+    #generators for the kernel
+    self.gen_word = []
+    #this records which way points towards the origin (stays None if it's not in the spanning tree)
+    self.toward_basepoint = None
+    
   
   def __str__(self):
     s = '(' + str(self.source) + '->' + str(self.dest) + ', ' + self.label_forward + ', ' + self.label_backward + ')'
@@ -37,6 +61,10 @@ class Edge:
       s += "*dead*"
     if self.carried_by_edge != None:
       s += ' carried by ' + str(self.carried_by_edge)
+    if self.gen_word != None:
+      s += ' gen word: ' + str(self.gen_word)
+    if self.toward_basepoint != None:
+      s += ' toward basepoint: ' + str(self.toward_basepoint)
     return s
     
   def __repr__(self):
@@ -58,6 +86,7 @@ class Vertex:
         self.edges = []
     self.carries_folded_verts = None
     self.carried_by_vert = None
+    self.is_basepoint = None
     
   def __str__(self):
     s =  str(self.edges) 
@@ -67,6 +96,8 @@ class Vertex:
       s += "*dead*"
     if self.carried_by_vert != None:
       s += ' carried by ' + str(self.carried_by_vert)
+    if self.is_basepoint:
+      s += ' basepoint!'
     return s
   
   def __repr__(self):
@@ -100,7 +131,11 @@ class Fatgraph:
     self.E = [x for x in edges]
     self.unfolded_V = None
     self.unfolded_E = None
-  
+    self.orig_gen_words = None #these are the original words which gives the generators
+    self.kernel_words = None #these are the words in the original generators which 
+                             #were in the kernel (before folding got rid of them)
+    self.basepoint = None #if it has a basepoint vertex
+
   def __repr__(self):
     return 'Fatgraph(' + str(self.V) + ', ' + str(self.E) + ')'
     
@@ -121,7 +156,14 @@ class Fatgraph:
       ans += 'Unfolded edges: \n'
       for i,e in enumerate(self.unfolded_E):
         ans += str(i) + ": " + str(e) + '\n'
-      
+    if self.orig_gen_words != None:
+      ans += "Original gen words: \n"
+      for gw in self.orig_gen_words:
+        ans += str(gw) + '\n'
+    if self.kernel_words != None:
+      ans += "Words in the original kernel\n"
+      for kw in self.kernel_words:
+        ans += str(kw) + '\n'      
     return ans
   
   def write_file_new(self, filename):
@@ -225,9 +267,50 @@ class Fatgraph:
     
     if maintain_watch_edges:
       self.watch_edges = [[dest_edges[w] for w in W] for W in self.watch_edges]
+
+  def comb(self): 
+    """alters the .towards_basepoint fields of the edges to give a spanning tree"""
+    if len(self.V) == 0:
+      return
+    if self.basepoint == None:
+      self.basepoint = 0
+      self.V[0].is_basepoint = True
+      for i in xrange(1, len(self.V)):
+        self.V[i].is_basepoint = False
+    for e in self.E:
+      e.toward_basepoint = None
+    done_or_stacked_vert = [False for i in xrange(len(self.V))]
+    vert_stack = [self.basepoint]
+    done_or_stacked_vert[self.basepoint] = True
+    while len(vert_stack) > 0:
+      vi = vert_stack.pop()
+      v = self.V[vi]
+      for e,d in v.edges:
+        ovi = (self.E[e].dest if d else self.E[e].source)
+        if not done_or_stacked_vert[ovi]:
+          self.E[e].toward_basepoint = not d
+          done_or_stacked_vert[ovi] = True
+          vert_stack.append(ovi)
+    return      
   
+  def orig_gen_word_from_basepoint_to_vert(self, vi_in):
+    """returns an (unreduced) list of original gens from the origin to vertex vi, 
+    by following the cominb back (this requires that there is a combing)"""
+    ans = []
+    vi = vi_in
+    while not self.V[vi].is_basepoint:
+      v = self.V[vi]
+      for e,d in v.edges:
+        if self.E[e].toward_basepoint == d:
+          w = self.E[e].gen_word
+          if not d:
+            w = [(g, -d) for (g,d) in w[::-1]]
+          ans.extend(w)
+          vi = (self.E[e].dest if d else self.E[e].source)
+          break
+    return [(g, -d) for (g,d) in ans[::-1]]
   
-  def unfolded_edge_pair(self, v_ind, maintain_watch_edges=False):
+  def unfolded_edge_pair(self, v_ind, maintain_watch_edges=False, fold_kernel_edges=True):
     """returns a pair of edge indices which have the same outgoing label,
        or None if no such pair exists"""
     if not maintain_watch_edges:
@@ -235,9 +318,11 @@ class Fatgraph:
       for i in xrange(len(self.V[v_ind].edges)):
         edge_ind, edge_dir = self.V[v_ind].edges[i]
         ol = (self.E[edge_ind].label_forward if edge_dir else self.E[edge_ind].label_backward)
+        ov = (self.E[edge_ind].dest if edge_dir else self.E[edge_ind].source)
         if ol in outgoing_labels:
-          return (outgoing_labels[ol], i)
-        outgoing_labels[ol] = i
+          if fold_kernel_edges or outgoing_labels[ol][1] != ov: 
+            return (outgoing_labels[ol], (i,ov))
+        outgoing_labels[ol] = (i,ov)
       return None
     else:
       outgoing_labels = {}
@@ -249,9 +334,11 @@ class Fatgraph:
         if self.watch_edges[wli] == [edge_ind]:
           continue
         ol = (self.E[edge_ind].label_forward if edge_dir else self.E[edge_ind].label_backward)
+        ov = (self.E[edge_ind].dest if edge_dir else self.E[edge_ind].source)
         if ol in outgoing_labels:
-          return (outgoing_labels[ol], i)
-        outgoing_labels[ol] = i
+          if fold_kernel_edges or outgoing_labels[ol][1] != ov:
+            return (outgoing_labels[ol], (i,ov))
+        outgoing_labels[ol] = (i,ov)
       return None
   
   def unfolded_fatgraph_edge_pair(self, v_ind):
@@ -267,11 +354,11 @@ class Fatgraph:
         ovi1 = (self.E[e1].dest if d1 else self.E[e1].source)
         ovi2 = (self.E[e2].dest if d2 else self.E[e2].source)
         if ovi1 != ovi2:
-          return (i, (i+1)%lve)
+          return ((i,ovi1), ((i+1)%lve, ovi2))
         ov_e1_ind = self.V[ovi1].edges.index( (e1, not d1) )
         ov_e2_ind = self.V[ovi1].edges.index( (e2, not d2) )
         if ov_e1_ind == (ov_e2_ind+1)%len(self.V[ovi1].edges):
-          return (i, (i+1)%lve)
+          return ((i,ovi1), ((i+1)%lve, ovi2))
     return None
   
   def is_folded(self, fatgraph_folded=False):
@@ -282,6 +369,11 @@ class Fatgraph:
         return False
     return True      
     
+
+  
+
+
+
   
   def fold(self, fatgraph_fold=False, maintain_watch_edges=False, verbose=False): 
     """returns the folded version of the fatgraph, with the folded structure; 
@@ -296,6 +388,7 @@ class Fatgraph:
       new_F.V[i].carries_folded_verts = [i]
     for i in xrange(len(new_F.E)):
       new_F.E[i].carries_folded_edges = [i]
+    new_F.orig_gen_words = copy.deepcopy(self.orig_gen_words)
     
     #initialize the watch list, if necessary
     if maintain_watch_edges:
@@ -316,7 +409,7 @@ class Fatgraph:
         if fatgraph_fold:
           unfolded_e_p = new_F.unfolded_fatgraph_edge_pair(i)
         else:
-          unfolded_e_p = new_F.unfolded_edge_pair(i, maintain_watch_edges=maintain_watch_edges)
+           unfolded_e_p = new_F.unfolded_edge_pair(i, maintain_watch_edges=maintain_watch_edges, fold_kernel_edges=False)
             
         if unfolded_e_p != None:
           unfolded_vert = i
@@ -328,11 +421,33 @@ class Fatgraph:
         print "Found unfolded vertex ", unfolded_vert, " with edges ", unfolded_e_p
       
       #fold the edges together
-      i1, i2 = unfolded_e_p
+      (i1,ovi1), (i2,ovi2) = unfolded_e_p
       v = new_F.V[unfolded_vert]
       ei1, d1 = v.edges[i1]
       ei2, d2 = v.edges[i2]
-      e1, e2 = new_F.E[ei1], new_F.E[ei2]
+      
+      #just a test that should be removed
+      e1 = new_F.E[ei1]
+      e2 = new_F.E[ei2]
+      ovi1_test = (e1.dest if v.edges[i1][1] else e1.source)
+      ovi2_test = (e2.dest if v.edges[i2][1] else e2.source)
+      if ovi1 != ovi1_test or ovi2 != ovi2_test:
+        print "Error; other vertices aren't right"
+        return 1/0
+
+      if ovi1 == ovi2 and not fatgraph_fold:
+        print "Error; other vertices shouldn't be the same"
+      #we need to make sure that edge 1 points to the basepoint, if
+      #one of ov1 and ov2 is the basepoint
+      if self.V[ovi2].is_basepoint:
+        #swap edges 1 and 2
+        i1, ei1, d1, ovi1,  i2, ei2, d2, ovi2, =  i2, ei2, d2, ovi2,  i1, ei1, d1, ovi1 
+       
+      #get the actual edges and vertices
+      ov1, ov2 = new_F.V[ovi1], new_F.V[ovi2]
+      e1, e2 = new_F.E[ei1], new_F.E[ei2]            
+
+      #add the carried edges to e1
       e1.carries_folded_edges.extend(e2.carries_folded_edges)
       e2.dead = True
       
@@ -358,20 +473,26 @@ class Fatgraph:
       if verbose:
         print "This is edges with main indices ", v.edges[i1], ' and ', v.edges[i2]
       
-      #get the other vertices 
-      ovi1 = (e1.dest if v.edges[i1][1] else e1.source)
-      ovi2 = (e2.dest if v.edges[i2][1] else e2.source)
-      ov1, ov2 = new_F.V[ovi1], new_F.V[ovi2]
-      
       if verbose:
         print "The vertices to fold together are ", ovi1, ' and ', ovi2
       
       #remove edge 2 altogether
       #note we remove the origin first, *then* the destination, and we 
-      #remember the destination index.  This ensure we know where to glue 
+      #remember the destination index.  This ensures we know where to glue 
       #the edges from vertex 1
       del v.edges[i2]
       ov2_e_ind = ov2.edges.index( (ei2, not d2) )
+
+      #get the *outgoing* gen word along edge 1
+      x = e1.gen_word
+      X = [(g, -d) for (g,d) in x[::-1]]
+      if not d1:
+        x,X = X,x
+      #and the outgoing gen word along edge 2
+      y = e2.gen_word
+      Y = [(g, -d) for (g,d) in y[::-1]]
+      if not d2:
+        y,Y = Y,y
       
       if ovi1 != ovi2:
         #get a list of the edges that are in vertex 2, and in the 
@@ -380,11 +501,24 @@ class Fatgraph:
                           + ov2.edges[:ov2_e_ind]
         
         #for all these edges, make sure they point to the right place
+        #and make sure their gen words are correct
+        #if x,y,w are outgoing words from edge 1, edge 2, and ov2, 
+        #then w should be replaced with x^{-1}yw
+        #note this will correctly handle loops
         for (et, dt) in edges_from_vert_2:
           if dt:
             new_F.E[et].source = ovi1
+            new_F.E[et].gen_word = gen_reduce(X + y + new_F.E[et].gen_word)
           else:
             new_F.E[et].dest = ovi1
+            new_F.E[et].gen_word = gen_reduce(new_F.E[et].gen_word + Y + x)
+        #if y is a loop, then x is becoming a loop, and the label shouldn't 
+        #be x; it should be Xyx
+        if ovi2 == unfolded_vert:
+          if d2:
+            e1.gen_word = gen_reduce(X + y + x)
+          else:
+            e1.gen_word = gen_reduce(X + Y + x)
         
         #get the index in vertex 1 
         ov1_e_ind = ov1.edges.index( (ei1, not d1) )
@@ -401,10 +535,97 @@ class Fatgraph:
         ov2.dead = True
       
       else: #if ov1 == ov2, then we don't need to get rid of vertex 2 -- just delete the incoming location
+        #note this can only happen in fatgraph folding, when we don't care about the kernel
         del ov2.edges[ov2_e_ind]
     
-    #the graph is folded now, but we need to clean it up
+
+    #the graph is folded now except for kernel items, but we need to clean it up
     new_F.cleanup(maintain_watch_edges=maintain_watch_edges)
+
+    #now the graph is folded, except for things in the kernel
+    #unless we were fatgraph folding, in which case we're just done
+    new_F.kernel_words = []
+    if not fatgraph_fold:
+      new_F.comb()
+      if verbose:
+        print "Now finding things in the kernel"
+        print new_F
+      while True:
+        unfolded_vert = None
+        unfolded_e_p = None
+        for i in xrange(len(new_F.V)):
+          if hasattr(new_F.V[i], 'dead'):
+            continue
+          unfolded_e_p = new_F.unfolded_edge_pair(i, maintain_watch_edges=maintain_watch_edges, fold_kernel_edges=True)
+          if unfolded_e_p != None:
+            unfolded_vert = i
+            break
+        if unfolded_vert == None:
+          break
+        #get the data on the edges
+        (i1,ovi1), (i2,ovi2) = unfolded_e_p
+        v = new_F.V[unfolded_vert]
+        ei1, d1 = v.edges[i1]
+        ei2, d2 = v.edges[i2]
+        if ovi1 != ovi2:
+          print "Error; other vertices should be the same"
+        
+        #one of the edges must be an edge not in the spanning true
+        #make sure that edge 2 is not in the spanning tree (so we can delete it)
+        if new_F.E[ei2].toward_basepoint != None:
+          #swap edges 1 and 2
+          i1, ei1, d1, ovi1,  i2, ei2, d2, ovi2, =  i2, ei2, d2, ovi2,  i1, ei1, d1, ovi1 
+
+        #get the actual edges and vertices
+        ov1, ov2 = new_F.V[ovi1], new_F.V[ovi2]
+        e1, e2 = new_F.E[ei1], new_F.E[ei2]            
+
+        #add the carried edges to e1
+        e1.carries_folded_edges.extend(e2.carries_folded_edges)
+        e2.dead = True
+      
+        if verbose:
+          print "Found kernel element: folding ", ei1, d1, ' and ', ei2, d2
+
+        #if we're maintaining watch edges, then we need to 
+        #remove the folded edges from the watch lists
+        if maintain_watch_edges:
+          wli1 = new_F.watch_edges_dict[ei1]
+          wli2 = new_F.watch_edges_dict[ei2]
+          if ei1 in new_F.watch_edges[wli1]:
+            new_F.watch_edges[wli1].remove(ei1)        
+            if verbose:
+              print "Removing edge ", ei1, " from watch list ", wli1
+          elif verbose:
+            print "Didn't need to remove ", ei1, " from watch list ", wli1
+          if ei2 in new_F.watch_edges[wli2]:
+            new_F.watch_edges[wli2].remove(ei2)
+            if verbose:
+              print "Removing edge ", ei2, " from watch list ", wli2
+          elif verbose:
+            print "Didn't need to remove ", ei2, " from watch list ", wli2
+            
+        
+        #now we just need to delete edge 2
+        del v.edges[i2]
+        ov2_e_ind = ov2.edges.index( (ei2, not d2) )
+        del ov2.edges[ov2_e_ind]
+
+        #to figure out the word in the kernel, we get the word z from 
+        #the basepoint to unfolded_vertex.  then the kernel word 
+        #is zxy^{-1}z^{-1}, where x is the word away from unfolded vert along edge1, and similarly for y
+        z = new_F.orig_gen_word_from_basepoint_to_vert(unfolded_vert)
+        x = e1.gen_word
+        if not d1:
+          x = [(g, -d) for (g,d) in x[::-1]]
+        Y = e2.gen_word
+        if d2:
+          Y = [(g, -d) for (g,d) in Y[::-1]]
+        Z = [(g, -d) for (g,d) in z[::-1]]
+        new_F.kernel_words.append( gen_reduce(z+x+Y+Z) )
+      #the graph is totally folded now, but we need to clean up kernel edges
+      new_F.cleanup(maintain_watch_edges=maintain_watch_edges)      
+
     return new_F
       
   
@@ -1135,10 +1356,11 @@ def free_map_kernel(target_words, verbose=0):
   #labeled by the target_words
   V = [ Vertex([]) ]
   E = []
-  watch_edges = []
+  V[0].is_basepoint = True
+  orig_gen_words = []
   #for each word, 
   for w in target_words:
-    watch_edges.append([])
+    orig_gen_words.append( [ [], w ] )
     for i in xrange(len(w)):
       this_edge_ind = len(E)
       E.append( Edge( -1, -1, w[i], inverse(w[i]) ) )
@@ -1156,35 +1378,25 @@ def free_map_kernel(target_words, verbose=0):
         V.append( Vertex( [ (this_edge_ind, False) ] ) )
       E[-1].source = prev_vert_ind
       E[-1].dest = next_vert_ind
-      watch_edges[-1].append(this_edge_ind)
+      orig_gen_words[-1][0].append( (this_edge_ind, True) )
+    E[-1].gen_word = [(len(orig_gen_words)-1, 1)]
   G = Fatgraph(V,E)
-  #first, fold it, while maintaining at least one edge in each loop by itself
-  G.watch_edges = watch_edges
-  G = G.fold(maintain_watch_edges=True)
-  new_watch_edges = [w[0] for w in G.watch_edges]
-  #now we have created the graph; find something in the kernel
-  H = G.fold()
-  K = H.kernel_element(verbose=verbose)
-  kernel_edge_list = K[0][0]
-  #read off the word in the source gens
+  G.orig_gen_words = orig_gen_words
+  G.basepoint = 0
+  return G
+  G = G.fold(verbose=(verbose>0))
+  #the kernel words will be in G.kernel_words
   #the source gens will be x,y,z,w if there's <= 4, or x1, x2, ... if more
   if len(target_words) <= 4:
     gens = ['x','y','z','w'][:len(target_words)]
   else:
     gens = ['x' + str(i) for i in xrange(len(target_words))]
-  ker_word = []
-  trivial_word = []
-  for (e,d) in kernel_edge_list:
-    if e in new_watch_edges:
-      gen_ind = new_watch_edges.index(e)
-      if d:
-        ker_word.append( gens[ gen_ind ] )
-        trivial_word.append( target_words[ gen_ind ] )
-      else:
-        ker_word.append( gens[ gen_ind ].swapcase() )
-        trivial_word.append( inverse(target_words[ gen_ind ]) )
-  return ''.join(ker_word), K[0][1]
-  
+  ker_words = []
+  for kw in G.kernel_words:
+    ker_words.append('')
+    for (g,s) in kw:
+      ker_words[-1] += (gens[g] if s>0 else inverse(gens[g]))
+  return ker_words
 
 
 
