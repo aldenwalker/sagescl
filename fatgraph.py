@@ -35,6 +35,8 @@ def gen_reduce(W_in):
       i += 1
   return W
 
+def gen_word_in_letters(W_in):
+  return ''.join([(alphabet[i] if d>0 else alphabet[i].swapcase()) for (i,d) in W_in])
 
 
 class Edge:
@@ -292,6 +294,39 @@ class Fatgraph:
           done_or_stacked_vert[ovi] = True
           vert_stack.append(ovi)
     return      
+  
+  def comb_and_find_gen_words(self):
+    """combs the graph and picks edeges to be the gen words, and 
+    fills in what the gen words are, and finds a basepoint"""
+    self.comb()
+    self.orig_gen_words = []
+    for ei, e in enumerate(self.E):
+      if e.toward_basepoint == None: #if it's an edge giving a generator
+        #figure out the paths
+        path_to_source = self.edge_path_from_basepoint_to_vert(e.source)
+        path_to_dest = self.edge_path_from_basepoint_to_vert(e.dest)
+        path_from_dest = [(j,not d) for (j,d) in path_to_dest[::-1]]
+        full_path = path_to_source + [(ei,True)] + path_from_dest
+        gen_word_from_basepoint = ''.join([(self.E[j].label_forward if d else self.E[j].label_backward) for (j,d) in path_to_source])
+        gen_word_to_basepoint = ''.join([(self.E[j].label_forward if d else self.E[j].label_backward) for (j,d) in path_from_dest])
+        full_gen_word = gen_word_from_basepoint + e.label_forward + gen_word_to_basepoint
+        self.orig_gen_words.append( [full_path, full_gen_word] )
+        #label the edge with the gen word 
+        e.gen_word = [(len(self.orig_gen_words)-1, 1)]
+    return 
+  
+  def edge_path_from_basepoint_to_vert(self, vi_in):
+    ans = []
+    vi = vi_in
+    while not self.V[vi].is_basepoint:
+      v = self.V[vi]
+      for e,d in v.edges:
+        if self.E[e].toward_basepoint != d:
+          continue
+        ans.append( (e,d) )
+        vi = (self.E[e].dest if d else self.E[e].source)
+        break
+    return [(e, not d) for (e,d) in ans[::-1]]
   
   def orig_gen_word_from_basepoint_to_vert(self, vi_in):
     """returns an (unreduced) list of original gens from the origin to vertex vi, 
@@ -1106,8 +1141,9 @@ class Fatgraph:
     
   
   def cover_with_loops_embedded(self, path, verbose=0):
-    """returns a fatgraph which covers self and which contains a lift of path 
-    which is embedded, also returns the lifted path"""
+    """returns a fatgraph which covers self and which contains a lift of paths 
+    which is embedded, also returns the lifted paths"""
+    
     #for the vertices in the path, record which time it's being hit
     hit_verts_and_times = [0 for _ in xrange(len(path))]
     last_hit_time = {}
@@ -1186,7 +1222,80 @@ class Fatgraph:
     return (Fatgraph(new_verts, new_edges), cover_edge_path)
     
     
+  def small_cover_with_loops_embedded(self, paths, verbose=0):
+    """construct a cover of a smallish degree in which the paths are embedded; 
+    it returns the covering fatgraph, plus the covering paths in the cover"""
     
+    #get the collection of edge pairs around every vertex
+    #an edge pair is (i,j), for the ith path, jth and j+1st position
+    edge_pairs = [[] for _ in xrange(len(self.V))]
+    for i,p in enumerate(paths):
+      for j,(e,d) in enumerate(p):
+        vi = (self.E[e].dest if d else self.E[e].source)
+        edge_pairs[vi].append( (i,j) )
+    
+    #greedily build collections of edge pairs to appear on 
+    #the various levels at each vertex
+    #the groups_of_edge_pairs will be collections of sets of indices 
+    #into the edge_pairs[i] list
+    groups_of_edge_pairs = [[] for _ in xrange(len(self.V))]
+    for i,v in enumerate(self.V):
+      done_eps = [False for _ in xrange(len(edge_pairs[i]))]
+      while False in done_eps:
+        current_ep_set = set()
+        #scan through and add all the edge pairs we can
+        #this only requires one scan through
+        for epi1, (j,k) in enumerate(edge_pairs[i]):
+          if all([are_compatible_eps( (j,k), edge_pairs[i][epi2] ) for epi2 in current_ep_set]):
+            current_ep_set.add( (j,k) )
+            done_eps[epi1] = True
+        #add the current set
+        groups_of_edge_pairs[i].append( current_ep_set )
+    
+    #now we have collections of edge pairs
+    cover_degree = max(map(len, groups_of_edge_pairs))
+    
+    #for simplicity, we'll just record the level of all the edge pairs
+    edge_pair_levels = {}
+    for i,v in enumerate(self.V):
+      for j,gep in enumerate(groups_of_edge_pairs[i]):
+        for ep in gep:
+          if ep in edge_pair_levels:
+            print "Error: edge pair level already recorded?"
+          edge_pair_levels[ep] = j
+
+    #for each edge, build a permutation (list) which says what is required
+    #None means there is no requirement
+    edge_perms = [ [None for _ in xrange(cover_degree)] for i in xrange(len(self.E))]
+    
+    for i,p in enumerate(paths):
+      for j, (e,d) in enumerate(p):
+        j_prev = (j-1)%len(p)
+        level = edge_pair_levels[ (i,j) ]
+        prev_level = edge_pair_levels[ (i,j_prev) ]
+        if d:
+          edge_perms[e][j_prev] = j
+        else:
+          edge_perms[e][j] = j_prev
+    
+    #now we have partial permutations; we need to fill them in
+    #we want to do this in such a way that there are as few loops as possible
+    #or each permutations is close to transitive, just to mess things up
+    for ei,e in enumerate(self.E):
+      source_indices = [i for i in xrange(cover_degree) if edge_perms[ei][i] == None]
+      dest_indices = [i for i in xrange(cover_degree) if i not in edge_perms[ei]]
+      
+      
+      
+
+        
+        
+          
+        
+      
+
+  
+  
   
   def next_edge(self, current_edge, current_direction):
     """returns the next edge (reading along boundary); for directions, 0 means forward, 1 backward"""
@@ -1383,7 +1492,7 @@ def free_map_kernel(target_words, verbose=0):
   G = Fatgraph(V,E)
   G.orig_gen_words = orig_gen_words
   G.basepoint = 0
-  return G
+#  return G
   G = G.fold(verbose=(verbose>0))
   #the kernel words will be in G.kernel_words
   #the source gens will be x,y,z,w if there's <= 4, or x1, x2, ... if more
