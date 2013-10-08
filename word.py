@@ -10,6 +10,25 @@ nextLetterChoices3 = dict( [ ( x, [y for y in L if x != y.swapcase()]) for x in 
 L4 = ['a','b','c','d','A','B','C','D']
 nextLetterChoices4 = dict( [ ( x, [y for y in L4 if x != y.swapcase()]) for x in L4] )
 
+def non_reduced_index( w ):
+  """return the first index i for which i, i+1 is nonreduced"""
+  LW = len(w)
+  if LW == 0 or LW == 1:
+    return None
+  for i in xrange(LW-1):
+    if w[i] == w[i+1].swapcase():
+      return i
+  if w[LW-1] == w[0].swapcase():
+    return LW-1
+  return None
+
+def letter_index_dict(w):
+  """return a dictionary whose keys are letters and whose values are lists of indices"""
+  ans = {}
+  for i, let in enumerate(w):
+    ans[let] = ans.get(let, []) + [i]
+  return ans
+
 
 def multiply_words(w1, w2=None):
   if type(w1) == str:

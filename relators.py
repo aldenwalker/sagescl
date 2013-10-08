@@ -1,11 +1,4 @@
-def non_reduced_index( w ):
-  LW = len(w)
-  for i in xrange(LW-1):
-    if w[i] == w[i+1].swapcase():
-      return i
-  if w[LW-1] == w[0].swapcase():
-    return LW-1
-  return None
+from word import *
 
 def reduce_disk( D ) :
   """reduce a disk -- i.e. reduce the boundary by folding"""
@@ -15,8 +8,19 @@ def reduce_disk( D ) :
     if nri == None:
       break
     #just remove the letters at nri and nri+1
-    LD[0] = LD[0][:nri] + LD[0][ ((nri+1)%len(LD[0])): ]
-    LD[1] = LD[1][:nri] + LD[1][ ((nri+1)%len(LD[1])): ]
+    LLD0 = len(LD[0])
+    if nri == LLD0-1:
+      LD[0] = LD[0][1:LLD0-1]
+      LD[1] = LD[1][1:LLD0-1]
+    elif nri == 0:
+      LD[0] = LD[0][2:]
+      LD[1] = LD[1][2:]
+    elif nri == LLD0-2:
+      LD[0] = LD[0][:LLD0-2]
+      LD[1] = LD[1][:LLD0-2]
+    else:
+      LD[0] = LD[0][:nri] + LD[0][ (nri+2): ]
+      LD[1] = LD[1][:nri] + LD[1][ (nri+2): ]
   return (LD[0], tuple(LD[1]))
 
 def glue_disks_together((d1_word, d1_lets), d1_ind, (d2_word,d2_lets), d2_ind):
@@ -29,26 +33,29 @@ def glue_disks_together((d1_word, d1_lets), d1_ind, (d2_word,d2_lets), d2_ind):
   glued_lets = d1_lets[:d1_ind] + d2_lets[(d2_ind+1):] + d2_lets[:d2_ind] + d1_lets[(d1_ind+1):]
   return reduce_disk( (glued_word, glued_lets) )
 
-def letter_index_dict(w):
-  ans = {}
-  for let, i in enumerate(w):
-    ans[let] = ans.get(let, []) + [i]
-  return ans
-
 def all_ways_to_add_relator( (db, lets), R ):
   """returns a set of disks which give all outcomes from 
   adding one of the relators to D = (d,lets).  It won't add a relator to 
   its inverse in the matching location.  The relators must be listed [relators, inverses]"""
   new_disks = set()
-  for r,ri in enumerate(R): #try every relator
+  #print "Adding to the disk ", (db, lets)
+  for ri, r in enumerate(R): #try every relator
     LR = len(R)
+    Lr = len(r)
     lets_in_r = letter_index_dict(r)
-    relator_disk = ( r, tuple([ (ri, j) for j in xrange(LR)]) ) #the disk which is the relator
-    rii = (ri + (LR/2)) % len(LR)  # the index of the inverse relator
+    relator_disk = ( r, tuple([ (ri, j) for j in xrange(len(r))]) ) #the disk which is the relator
+    rii = (ri + (LR/2)) % LR  # the index of the inverse relator
+    #print "Adding relator: ", relator_disk
+    #print "With letter indices: ", lets_in_r
+    #print "And inverse relator ", rii
     for dbi in xrange(len(db)):
-      relator_gluing_indices = lets_in_r[ inverse(db[dbi]) ]
+      #print "Trying spot ", dbi
+      relator_gluing_indices = lets_in_r.get( inverse(db[dbi]), [] )
+      #print "It can glue on at indices ", relator_gluing_indices
       for rgi in relator_gluing_indices:
-        if lets[dbi][0] == rii and lets[dbi][1] == LR - rgi:
+        #print "Thinking about gluing new relator letter ", relator_disk[1][rgi], " to ", lets[dbi]
+        if lets[dbi][0] == rii and lets[dbi][1] == (Lr - 1) - rgi:
+          #print "Nope this would be nonreduced"
           continue  #this would be a non-reduced van-Kampen diagram
         new_disks.add( glue_disks_together( relator_disk, rgi, (db,lets), dbi ) )
   
@@ -63,20 +70,26 @@ def gen_disk_boundaries(R_in, max_num_tiles):
   #glue a relator to an inverse relator
   R = []
   for r in R_in:
-    mcr = min_cyclic(r)
-    if mcr in R or inverse(mcr) in R:
+    lcr = least_cyclic_rep(r)
+    if lcr in R or inverse(lcr) in R:
       continue
-    R.append(mcr)
+    R.append(lcr)
   RI = [inverse(r) for r in R]
   R = R + RI
 
-  old_disks = []
-  current_disks = set([ (r, tuple([(i,j) for j in xrange(len(r))])) for r,i in enumerate(R)])
+  old_disks = set()
+  current_disks = set([ (r, tuple([(i,j) for j in xrange(len(r))])) for i,r in enumerate(R)])
   current_disk_size = 1
   while current_disk_size < max_num_tiles:
-    new_disks = []
+    new_disks = set()
     for D in current_disks:
       new_disks = new_disks.union( all_ways_to_add_relator( D, R ) )
+    #print "Current disk size: ", current_disk_size
+    #print "Had the current disks: "
+    #print current_disks
+    #print "Just made the new disks: "
+    #print new_disks
     old_disks = old_disks.union(current_disks)
     current_disks = new_disks
+    current_disk_size += 1
   return [ r for (r,lets) in (old_disks | current_disks)]
