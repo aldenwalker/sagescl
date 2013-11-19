@@ -101,7 +101,7 @@ def cyc_red(w, marked=False):
     return w[i:LW-i]
 
 def cyc_red_get_conjugate(w):
-  if len(w) = 0 or len(w) == 1:
+  if len(w) == 0 or len(w) == 1:
     return (w, '')
   i=0
   Lw = len(w)

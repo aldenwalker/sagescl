@@ -3,8 +3,12 @@
 
 from word import *
 from sage.all import *
+import covering
+import ends
 
 import copy
+
+
 
 
 def approx_rat(x, tol=0.0000001):
@@ -327,6 +331,33 @@ class Fatgraph:
         vi = (self.E[e].dest if d else self.E[e].source)
         break
     return [(e, not d) for (e,d) in ans[::-1]]
+  
+  def all_edge_paths_from_basepoint_to_verts(self):
+    """returns a list of the edge paths to the basepoint for every vertex
+    (this is faster than calling the above function for every vertex"""
+    edge_paths = [None for i in xrange(len(self.V))]
+    edge_paths[self.basepoint] = []
+    for v, vi in enumerate(self.V):
+      if edge_paths[vi] != None:
+        continue
+      ans = []
+      cur_vi = vi
+      visted_vi = [vi]
+      while not self.V[cur_vi].is_basepoint:
+        cur_v = self.V[cur_vi]
+        for e,d in cur_v.edges:
+          if self.E[e].toward_basepoint != d:
+            continue
+          ans.append( (e,d) )
+          cur_vi = (self.E[e].dest if d else self.E[e].source)
+          visited_vi.append(cur_vi)
+          break
+      ans = [(e, not d) for (e,d) in ans[::-1]]
+      visted_vi = visited_vi[::-1]
+      for i in xrange(len(ans)):
+        edge_paths[visted_vi[i]] = ans[:i]
+    return edge_paths
+  
   
   def orig_gen_word_from_basepoint_to_vert(self, vi_in):
     """returns an (unreduced) list of original gens from the origin to vertex vi, 
@@ -1382,6 +1413,80 @@ class Fatgraph:
       boundaries[-1] = [boundary] + boundaries[-1]
         
     return boundaries    
+  
+  def lift(self, G):
+    """returns the fatgraph which is self lifted to the finite cover G"""
+    new_verts = [Vertex(None, None) for i in xrange(G.degree*len(self.V))]
+    new_edges = []
+    vertices_over_vert = [range(G.degee*i, G.degree*(i+1)) for i in xrange(len(self.V))]
+    for i,v in enumerate(self.V):
+      for cover_v_i in vertices_over_vert[i]:
+        new_verts[cover_v_i] = copy.deepcopy(v)
+    
+    #go to every vertex in the cover, and go out every outgoing edge
+    #(this will only go over every edge once)
+    for i,v in enumerate(self.V):
+      for sheet, cover_v_i in enumerate(vertices_over_vert[i]):
+        for k, (e, d) in enumerate(v.edges):
+          if not d: 
+            continue
+          source_ind = cover_v_i
+          edge_label_f = self.E[e].label_forward
+          edge_label_b = self.E[e].label_backward
+          if edge_label_f.isupper():
+            G_gen_ind = G.base_gen_inds[edge_label_f.swapcase()]
+            dest_sheet = G.base_gen_inverse_actions[G_gen_ind][sheet]
+          else:
+            G_gen_ind = G.base_gen_inds[edge_label_f]
+            dest_sheet = G.base_gen_actions[G_gen_ind][sheet]
+          dest_base = self.E[e].dest
+          dest_ind = vertices_over_vert[dest_base][dest_sheet]
+          dest_v_edge_ind = self.V[dest_base].find_edge_ind( (e, not d) )
+          new_edge_ind = len(new_edges)
+          new_verts[source_ind].edges[k] = (new_edge_ind, d)
+          new_verts[dest_ind].edges[dest_v_edge_ind] = (new_edge_ind, not d)
+          new_edges.append( Edge(source_ind, dest_ind, edge_label_f, edge_label_b) )
+    
+    return Fatgraph(new_verts, new_edges)
+  
+  def ends(self):
+    """Returns the list of ends, in cyclic order.  Effectively this just means 
+    returning the list of pi_1 generators as words in the free group, 
+    but being careful about the fatgraph structure.  This is basically the 
+    same function as comb_and_find_gen_words, but it's careful to 
+    do a tree search in the right order."""
+    self.comb()
+    edge_stack = [x for x in self.V[self.basepoint].edges]
+    #get all the edge paths from the vertices to the basepoint
+    edge_paths = self.all_edge_paths_from_basepoint_to_verts()
+    end_list = []
+    while len(edge_stack) > 0:
+      (ei,d) = edge_stack.pop()
+      vi = (self.E[ei].dest if d else self.E[ei].source)
+      v = self.V[vi]
+      vei = v.find_edge_ind( (ei, not d) )
+      nve = len(v.edges)
+      i = (vei+1)%nve
+      while i != vei:
+        (e2i, d2) = v.edges[i]
+        if self.E[e2i].towards_basepoint == None:
+          #get the path to the current vertex
+          path_to_v = edge_paths[vi]
+          other_vi = (self.E[e2i].dest if d2 else self.E[e2i].source)
+          path_to_other = edge_paths[other_vi]
+          path_from_other = [(e3i, not d3) for (e3i, d3) in path_to_other[::-1]]
+          end_list.append( path_to_v + [(e2i, not d2)] + path_from_other )
+        else:
+          edge_stack.append( (e2i, d2) )
+        i = (i+1)%nve
+    
+    #collapse the end list into words
+    for i,el in enumerate(end_list):
+      label_list = [ (self.E[ei].label_forward if d else self.E[ei].label_backward) for (ei, d) in el]
+      end_list[i] = FreeGroupEnd('', ''.join(label_list))
+      
+    return end_list
+  
   
   
 def read_file(filename):

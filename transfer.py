@@ -2,28 +2,11 @@ from sage.all import *
 import word
 import covering
 import fatgraph
-
-#an end is a finite prefix, followed by an infinitely repeating word
-class End:
-  def __init__(self, prefix, repeat):
-    self.prefix = prefix
-    self.repeat = repeat
-  
-  def ap_morph(self, phi):
-    ppre = phi.ap(self.prefix)
-    prea = phi.ap(self.repeat)
-    core, core_prefix = cyc_red_get_conjugate(prea)
-    ppre = multiply_words(ppre, core_prefix)
-    if ppre == '':
-      return End('', core)
-    while ppre[-1] == core[0].swapcase():
-      ppre += core
-    return End(ppre, core)
-      
+import ends
 
 
 
-def find_extremal_transfer(C_in, max_degree=None, degree_list=None):
+def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
   """given a chain, try to find an extremal rot transfer.  This will 
   take a whole bunch of covers and then look through all *basic* rots 
   for all the covers"""
@@ -54,8 +37,11 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None):
   s = Rational(s.numerator, s.denominator) #this turns it into a sage thing
   F = fatgraph.read_file(cur_dir + '/temp_extremal_surface.fg')
   
-  #get the list of ends
-  base_E = f.ends()
+  if verbose > 1:
+    print "Got scl = ", s
+    if verbose > 2:
+      print "Got extremal fatgraph: "
+      print str(F)
   
   #these are the good ones
   found_transfers = []
@@ -67,13 +53,30 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None):
     P = Permutations(deg).list()
     T = Tuples(P, rank)
     base_gens = word.alphabet[:rank]
-    for t in T:
-      G = covering.FISubgroup(base_gens, t)
-      conj_morphs = G.conjugation_action()
-      lifted_ends = [[e.ap_morph(phi) for e in base_E] for phi in conj_morphs]
-      compat_orders = cyclic_orders_compatible_with_end_lists(lifted_ends)
-      if len(compat_orders) != 0:
-        found_transfers.append((t, G, compat_orders))
+    if verbose > 2:
+      for t in T:
+        G = covering.FISubgroup(base_gens, t)
+        print "Found covering subgroup ", G
+        GF = F.lift(G)
+        print "Found lifted fatgraph: "
+        print(GF)
+        GFE = GF.ends()
+        print "Found end list: ", GFE
+        compat_orders = compatible_cyclic_orders(GFE)
+        print "Found compatible cyclic orders: ", compat_orders
+        if len(compat_orders) != 0:
+          print "*** good transfer ", (t, G, compat_orders)
+          found_transfers.append((t, G, compat_orders))
+    else:
+      for t in T:
+        G = covering.FISubgroup(base_gens, t)
+        GF = F.lift(G)
+        GFE = GF.ends()
+        compat_orders = ends.compatible_cyclic_orders(GFE, rank)
+        if len(compat_orders) != 0:
+          if verbose > 1:
+            print "*** good transfer ", (t, G, compat_orders)
+          found_transfers.append((t, G, compat_orders))
 
   return found_transfers
 

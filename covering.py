@@ -3,6 +3,7 @@
 import copy
 import word
 import morph
+import ends
 
 alphabet = list('abcdefghijklmnopqrstuvwxyz')
 
