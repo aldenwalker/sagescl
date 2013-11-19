@@ -100,6 +100,16 @@ def cyc_red(w, marked=False):
       i+=1
     return w[i:LW-i]
 
+def cyc_red_get_conjugate(w):
+  if len(w) = 0 or len(w) == 1:
+    return (w, '')
+  i=0
+  Lw = len(w)
+  hLw = Lw/2
+  while i < hLw and w[i] == w[-(i+1)]:
+    i+=1
+  return (w[i:-i], w[:i])
+
 def sign(letter):
   if letter.isupper():
     return -1

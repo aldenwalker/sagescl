@@ -23,11 +23,17 @@ class FISubgroup :
     self.base_gen_actions = copy.deepcopy(gen_actions)  #permutation action of base group gens
     self.base_gen_inverse_actions = [perm_inverse(x) for x in self.base_gen_actions]
     self.rank, self.gens, self.gens_to_base_group = None, None, None
+    
     self.fundamental_edges = None 
     #this is a dict of tuples (vert_ind, base_gen) -> our_gen which give the non-spanning
     #tree edges which give the generators for our fundamental group
     #(determining a word in our group just means recording which 
     #of these edges is crossed as we cross them (reading left to right))
+    
+    self.paths_to_0 = None
+    #this lists, for each vertex, the path (as a word in the base gens) to
+    #the zero vertex
+    
     if not self.compute_gens():
       self.connected = False
     else:
@@ -48,7 +54,7 @@ class FISubgroup :
     visited_vertices = []
     outgoing_edges = [[] for i in xrange(self.degree)]
     incoming_edges = [[] for i in xrange(self.degree)]
-    paths_to_0 = ['' for i in xrange(self.degree)]
+    self.paths_to_0 = ['' for i in xrange(self.degree)]
     self.gens = []
     self.gens_to_base_group = {}
     while len(undone_vertex_stack) > 0:
@@ -72,7 +78,7 @@ class FISubgroup :
             continue
         
         #don't backtrack
-        if len(paths_to_0[current_vertex]) > 0 \
+        if len(self.paths_to_0[current_vertex]) > 0 \
            and word.inverse(g) == paths_to_0[current_vertex][-1]:
            continue
            
@@ -81,13 +87,13 @@ class FISubgroup :
           self.gens.append(alphabet[len(self.gens)])
           self.fundamental_edges[(current_vertex, g)] = self.gens[-1]
           self.fundamental_edges[(target, word.inverse(g))] = word.inverse(self.gens[-1])
-          our_gen = paths_to_0[current_vertex] + g + word.inverse(paths_to_0[target])
+          our_gen = self.paths_to_0[current_vertex] + g + word.inverse(self.paths_to_0[target])
           self.gens_to_base_group[self.gens[-1]] = our_gen
           self.gens_to_base_group[word.inverse(self.gens[-1])] = word.inverse(our_gen)
         else: #this edge is new
           if target in undone_vertex_stack: #don't do them twice
             continue
-          paths_to_0[target] = paths_to_0[current_vertex] + g
+          self.paths_to_0[target] = self.paths_to_0[current_vertex] + g
           undone_vertex_stack = [target] + undone_vertex_stack
     #ok, we are done; however, if we note that we haven't 
     #visited everything, then we know that the covering space isn't connected,
@@ -136,7 +142,13 @@ class FISubgroup :
     
   def gens_in_base_group(self):
     return [self.gens_to_base_group[x] for x in alphabet[:self.rank]]
-
+    
+  def conjugation_action(self):
+    """Compute a list of automorphisms on the covering group (in terms 
+    of the covering group generators) corresponding to the coset 
+    action.  It computes it by just going to every vertex and doing 
+    all the generator words, and re-expressing them in the original covering gens"""
+    pass
 
 
 

@@ -6,6 +6,7 @@ import fractions
 
 from word import *
 from HNN import min_in_orbit
+import fatgraph
 
 WDIR = './'
 FNULL = open('/dev/null', 'w')
@@ -13,6 +14,63 @@ SCALLOPDIR = '/home/akwalker/Documents/software/scallop/'
 TROLLOPDIR = '/home/akwalker/Documents/software/trollop/'
 SCABBLEDIR = '/home/akwalker/Documents/software/scabble/'
 GALLOPDIR = '/home/akwalker/Documents/software/gallop/'
+
+
+def scl(chain, mode='local', args=[], return_fraction=True):
+
+  if chain == '' or chain == ['']:
+    return 0
+  
+  if type(chain) == str:
+    C = [chain]
+  else :
+    C = [x for x in chain if x != '']
+  
+  cmd_list = ['scallop', '-' + mode] + args + chain
+    
+  #print "Running " + SCALLOPDIR+run_string[0]
+  if sys.version[:3] == '2.7':
+    mout = subprocess.check_output(cmd_list,  \
+                             executable=SCALLOPDIR+cmd_list[0],     \
+                             stderr=FNULL,                            \
+                             cwd=SCALLOPDIR)
+  else:
+    sca = subprocess.Popen(cmd_list,  \
+                       executable=SCALLOPDIR+cmd_list[0],         \
+                       stdout=subprocess.PIPE,                  \
+                       stderr=FNULL,                            \
+                       cwd=SCALLOPDIR)
+    mout = sca.communicate()[0]
+  if return_fraction:
+    dat = mout.split(' ')[-3]
+    return fractions.Fraction(dat)
+  else:
+    dat = mout.split(' ')[-1]
+    return eval(dat)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+########################################################################
+# these functions were written with the old scallop in mind
+
+
 
 def scylla(gen_string, C_input, method=None):
   if type(C_input) == str:
@@ -41,10 +99,7 @@ def scylla(gen_string, C_input, method=None):
   dat = mout.split(' ')[-3]
   return sage_eval(dat)
 
-
-
-
-def scl(C_input, scylla=None, scylla_i=False):
+def old_scl(C_input, scylla=None, scylla_i=False):
   gens =  list(set( (''.join(C_input)).lower() ))
   
   if C_input == '' or C_input == ['']:
@@ -79,6 +134,10 @@ def scl(C_input, scylla=None, scylla_i=False):
     mout = sca.communicate()[0]
   dat = mout.split(' ')[-3]
   return fractions.Fraction(dat)
+
+
+
+
 
 
 def scl_LP(C_input, filename, do5=False): 
