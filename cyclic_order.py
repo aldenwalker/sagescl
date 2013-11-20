@@ -1,4 +1,6 @@
+
 import word
+
 
 class CyclicOrder:
   def __init__(self, inp):
@@ -70,7 +72,8 @@ class CyclicOrder:
 
 
 
-def multiple_cyclic_order_eval([t0, t1, t2], CO_list) :
+def multiple_cyclic_order_eval(t, CO_list) :
+  t0, t1, t2 = t
   ords = set([O(t0, t1, t2) for O in CO_list])
   if 1 in ords:
     if -1 in ords:
@@ -88,33 +91,37 @@ def four_tuple_from_cyclic_orders(t, CO_list):
   got_order = None
   #0123 and reverse
   if s[0] == s[2] and s[0] != 0:
-    got_order = (CyclicOrder(u4si) if s[0] == 1 else CyclicOrder(u4si[::-1]))
+    got_order = (CyclicOrder(t) if s[0] == 1 else CyclicOrder(t[::-1]))
   elif s[1] == s[3] and s[1] != 0:
-    got_order = (CyclicOrder(u4si) if s[1] == 1 else CyclicOrder(u4si[::-1]))
+    got_order = (CyclicOrder(t) if s[1] == 1 else CyclicOrder(t[::-1]))
   #0132 and reverse
   elif s[2] == -s[1] and s[2] != 0:
-    got_order = CycLicOrder( [u4si[j] for j in ([0,1,3,2] if s[2]==1 else [2,3,1,0])] )
+    got_order = CycLicOrder( [t[j] for j in ([0,1,3,2] if s[2]==1 else [2,3,1,0])] )
   elif s[3] == -s[0] and s[3] != 0:
-    got_order = CycLicOrder( [u4si[j] for j in ([0,1,3,2] if s[3]==1 else [2,3,1,0])] )
+    got_order = CycLicOrder( [t[j] for j in ([0,1,3,2] if s[3]==1 else [2,3,1,0])] )
   #0213 and reverse
   elif s[1] == -s[0] and s[1] != 0:
-    got_order = CycLicOrder( [u4si[j] for j in ([0,2,1,3] if s[3]==1 else [3,1,2,0])] )
+    got_order = CycLicOrder( [t[j] for j in ([0,2,1,3] if s[3]==1 else [3,1,2,0])] )
   elif s[2] == -s[3] and s[2] != 0:
-    got_order = CycLicOrder( [u4si[j] for j in ([0,2,1,3] if s[3]==1 else [3,1,2,0])] )
+    got_order = CycLicOrder( [t[j] for j in ([0,2,1,3] if s[3]==1 else [3,1,2,0])] )
   
+  #we didn't conclude anything
+  if got_order == None:
+    return False
+
   #check consistency
-  s2 = [ got_order(*(u4si[:j] + u4si[j+1:])) for j in xrange(0, 4) ]
+  s2 = [ got_order(*(t[:j] + t[j+1:])) for j in xrange(0, 4) ]
   for j in xrange(4):
     if s[j] != 0 and s2[j] != s[j]:
       return None
-  if got_order == None:
-    return False
   return got_order
 
 def extend_suborders_to_order(rank, T):
+  print "Called to extend the orders: ", T
   gens = word.alphabet[:rank]
   gens += [x.swapcase() for x in gens]
   def cmp_rel_gen0(g1, g2):
     return multiple_cyclic_order_eval([gens[0], g2, g1], T)
-  sort(gens, cmp=cmp_rel_gen0)
+  gens = sorted(gens, cmp=cmp_rel_gen0)
+  print "Sorted order to ", gens
   return CyclicOrder(gens)

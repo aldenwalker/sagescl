@@ -1,3 +1,5 @@
+import sage.all as SAGE
+
 import word
 import cyclic_order
 
@@ -10,10 +12,10 @@ class FreeGroupEnd:
     self.rl = len(self.repeat)
   
   def __repr__(self):
-    return "End(%r,%r)" % self.prefix, self.repeat
+    return "End(%r,%r)" % (self.prefix, self.repeat)
   
   def __str__(self):
-    return "%r(%r)" % self.prefix, self.repeat
+    return "%r(%r)" % (self.prefix, self.repeat)
   
   def get_word(self, n=1):
     return self.prefix + (n*self.repeat)
@@ -86,7 +88,7 @@ def find_all_suborders(EL):
     if len(reduced_gen_dict[g]) == 1:
       continue
     new_EL = [EL[i][1::] for i in reduced_gen_dict[g]] + [g.swapcase()]
-    sub_COs.append(find_all_suborders(new_EL))
+    sub_COs += find_all_suborders(new_EL)
   
   if [] in sub_COs:
     return []
@@ -111,16 +113,15 @@ def compatible_cyclic_orders(EL, rank=None):
   SO = find_all_suborders(EL)
   if SO == []:
     return []
-  SO_lens = map(len, SO)
   
   #we check all the 4-tuples
-  gens = word.alphabet[:rank]
+  gens = word.alphabet[:R]
   gens += [g.swapcase() for g in gens]
-  unknown_4_subsets = list(Subsets(gens, 4))
+  unknown_4_subsets = list(SAGE.Subsets(gens, 4))
   known_4_tuple_orders = []
   
   #get all the 4-tuples that we can from the orders that we have
-  for i in xrange(len(uknown_4_subsets)-1, -1, -1):
+  for i in xrange(len(unknown_4_subsets)-1, -1, -1):
     got_order = cyclic_order.four_tuple_from_cyclic_orders(unknown_4_subsets[i], SO)
     if got_order == None:
       return []
@@ -142,9 +143,14 @@ def compatible_cyclic_orders(EL, rank=None):
         known_4_tuple_orders.append(got_order)
     if not did_something:
       break
-  
+
+  print "Found the known 4 tuples: ", known_4_tuple_orders
+
   #now we need to extend what we have to a cyclic order
-  CO = cyclic_order.extend_suborders_to_order(R, known_4_tuple_orders)
+  #there might be some tripods in the original thing, 
+  #and we should include those
+  SO_tripods = [O for O in SO if len(O)==3]
+  CO = cyclic_order.extend_suborders_to_order(R, SO_tripods + known_4_tuple_orders)
   return [CO]
   
   
