@@ -26,9 +26,9 @@ def scl(chain, mode='local', args=[], return_fraction=True):
   else :
     C = [x for x in chain if x != '']
   
-  cmd_list = ['scallop', '-' + mode] + args + chain
+  cmd_list = ['scallop', '-' + mode] + args + C
     
-  #print "Running " + SCALLOPDIR+run_string[0]
+  #print "Running " + SCALLOPDIR+str(cmd_list)
   if sys.version[:3] == '2.7':
     mout = subprocess.check_output(cmd_list,  \
                              executable=SCALLOPDIR+cmd_list[0],     \

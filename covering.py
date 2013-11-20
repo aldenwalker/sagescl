@@ -44,7 +44,7 @@ class FISubgroup :
     return str(self.base_gens) + ' ' + str(self.base_gen_actions)
     
   def __str__(self):
-    return self.repr()
+    return 'Covering group with base gen action: ' + str(self.base_gens) + ' ' + str(self.base_gen_actions) + '\nFundamental group as base gen words: ' + str(self.gens_to_base_group)
   
   def compute_gens(self):
     """self.gens = our generators; self.gens_in_base_gens = our gens, in terms of base"""
@@ -80,7 +80,7 @@ class FISubgroup :
         
         #don't backtrack
         if len(self.paths_to_0[current_vertex]) > 0 \
-           and word.inverse(g) == paths_to_0[current_vertex][-1]:
+           and word.inverse(g) == self.paths_to_0[current_vertex][-1]:
            continue
            
         #here we get an old vertex, so this is a generator
@@ -120,6 +120,74 @@ class FISubgroup :
         g = self.base_gen_inds[w[i]]
         v = self.base_gen_actions[g][v]
     return new_word
+  
+  def rewrite_path_from_base_gens(self, w, start_vert=0):
+    v = start_vert
+    new_word = ''
+    for i in xrange(len(w)):
+      if (v, w[i]) in self.fundamental_edges:
+        new_word += self.fundamental_edges[(v,w[i])]
+      if w[i].isupper():
+        g = self.base_gen_inds[word.inverse(w[i])]
+        v = self.base_gen_inverse_actions[g][v]
+      else:
+        g = self.base_gen_inds[w[i]]
+        v = self.base_gen_actions[g][v]
+    return new_word
+  
+  def path_end_vert(self, w):
+    v = 0
+    for g in w:
+      if g.isupper():
+        gi = self.base_gen_inds[g.swapcase()]
+        v = self.base_gen_inverse_actions[gi][v]
+      else:
+        gi = self.base_gen_inds[g]
+        v = self.base_gen_actions[gi][v]
+    return v
+  
+  def rewrite_path_from_base_gens_get_end(self, w, start_vert=0):
+    v = start_vert
+    new_word = ''
+    for i in xrange(len(w)):
+      if (v, w[i]) in self.fundamental_edges:
+        new_word += self.fundamental_edges[(v,w[i])]
+      if w[i].isupper():
+        g = self.base_gen_inds[word.inverse(w[i])]
+        v = self.base_gen_inverse_actions[g][v]
+      else:
+        g = self.base_gen_inds[w[i]]
+        v = self.base_gen_actions[g][v]
+    return (new_word, v)
+  
+  def lift(self, chain):
+    if type(chain) == list:
+      sublifts = [self.lift(x) for x in chain]
+      ans = []
+      for L in sublifts:
+        if type(L) == list:
+          ans += L
+        else:
+          ans.append(L)
+      return ans
+    vert_is_done = [False for i in xrange(self.degree)]
+    loops = []
+    while True:
+      i=0
+      while i<self.degree and vert_is_done[i]:
+        i+=1
+      if i == self.degree:
+        break
+      vert_is_done[i] = True
+      cur_word, dest_vert = self.rewrite_path_from_base_gens_get_end(chain, i)
+      while dest_vert != i:
+        vert_is_done[dest_vert] = True
+        sub_word, dest_vert = self.rewrite_path_from_base_gens_get_end(chain, dest_vert)
+        cur_word += sub_word
+      loops.append(cur_word)
+    return (loops[0] if len(loops) == 1 else loops)
+  
+  
   
   def contains(self, w):
     v = 0

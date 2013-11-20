@@ -216,6 +216,23 @@ def chain_rank(C):
   ml = max(lets.lower())
   return ord(ml) - 97 + 1
  
+def chain_rank_and_gens(C):
+  """figures out exactly how many letters there are (not like the above function
+  and what they are"""
+  found_letters = set()
+  lets = ''.join(C)
+  for L in lets:
+    found_letters.add(L)
+  gens = set([x for x in found_letters])
+  gens.union([x.swapcase() for x in found_letters])
+  gens = [g for g in gens if g.islower()]
+  return (len(gens), gens)
+  
+  
+ 
+ 
+ 
+ 
 def pair_jump(a,b,w):
   posa,posb,posB = -1,-1,-1
   wl = len(w)

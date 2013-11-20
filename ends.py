@@ -44,8 +44,8 @@ class FreeGroupEnd:
     return self.get_letter(n)
   
   def simplify(self):
-    core, core_prefix = cyc_red_get_conjugate(self.repeat)
-    ppre = multiply_words(self.prefix, core_prefix)
+    core, core_prefix = word.cyc_red_get_conjugate(self.repeat)
+    ppre = word.multiply_words(self.prefix, core_prefix)
     if ppre == '':
       return FreeGroupEnd('', core)
     while ppre[-1] == core[0].swapcase():
@@ -53,10 +53,9 @@ class FreeGroupEnd:
     return FreeGroupEnd(ppre, core)
 
   def lift(self, G):
-    """lift the end to the FISubgroup G.  It needs to be the case 
-    that the prefix and repeat are words in G"""
-    new_pref = G.rewrite_word_from_base_gens(self.prefix) 
-    new_rep = G.rewrite_word_from_base_gens(self.repeat)
+    """lift the end to the FISubgroup G"""
+    new_pref, dest_vert = G.rewrite_path_from_base_gens_get_end(self.prefix) 
+    new_rep = G.rewrite_path_from_base_gens(self.repeat, dest_vert)
     return FreeGroupEnd(new_pref, new_rep).simplify()
 
   def ap_morph(self, phi):
@@ -126,9 +125,17 @@ def compatible_cyclic_orders(EL, rank=None):
     R = rank
   
   #get all the suborders from the ends
-  SO = find_all_suborders(EL)
+  #we accept a list of ends or a list of lists of ends
+  if type(EL[0]) == list:
+    SO = []
+    for e in EL:
+      SO += find_all_suborders(e)
+  else:
+    SO = find_all_suborders(EL)
   if SO == []:
     return []
+  
+  #print "Found all the suborders: ", SO
   
   #we check all the 4-tuples
   gens = word.alphabet[:R]
@@ -138,7 +145,9 @@ def compatible_cyclic_orders(EL, rank=None):
   
   #get all the 4-tuples that we can from the orders that we have
   for i in xrange(len(unknown_4_subsets)-1, -1, -1):
+    #print "I'm checking if we know the order on: ", unknown_4_subsets[i]
     got_order = cyclic_order.four_tuple_from_cyclic_orders(unknown_4_subsets[i], SO)
+    #print "The order is: ", str(got_order)
     if got_order == None:
       return []
     if got_order != False:

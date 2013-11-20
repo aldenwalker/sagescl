@@ -62,6 +62,31 @@ class CyclicOrder:
   def __len__(self):
     return self.L
   
+  def step(self, a,b,c):
+    """return the number of steps from a to b, without crossing c"""
+    ai = self.indices[a]
+    bi = self.indices[b]
+    ci = self.indices[c]
+    if ai < ci:
+      ai += self.L
+    if bi < ci:
+      bi += self.L
+    return bi - ai
+  
+  def rot(self, w):
+    if type(w) == list:
+      return sum([self.rot(x) for x in w])
+    wr = w[::-1] + w[-1]
+    s = 0
+    for i in xrange(len(w)):
+      s += self.step(wr[i], wr[i+1], wr[i+1].swapcase())
+    if s%self.L != 0:
+      print "Rot isn't an integer?"
+      return 0
+    return s/self.L
+    
+  
+  
   def extend_to_full_gen_order(self, rank):
     """extend self to a full order on all generators"""
     gens = word.alphabet[:rank]
@@ -87,6 +112,7 @@ def multiple_cyclic_order_eval(t, CO_list) :
 
 def four_tuple_from_cyclic_orders(t, CO_list):
   s = [ multiple_cyclic_order_eval(t[:j] + t[j+1:], CO_list) for j in xrange(0, 4)]
+  #print "I evaluated the 4-tuple ", t, " on the cyclic orders and got: ", str(s)
   if None in s:
     return None
   got_order = None
@@ -97,14 +123,16 @@ def four_tuple_from_cyclic_orders(t, CO_list):
     got_order = (CyclicOrder(t) if s[1] == 1 else CyclicOrder(t[::-1]))
   #0132 and reverse
   elif s[2] == -s[1] and s[2] != 0:
-    got_order = CycLicOrder( [t[j] for j in ([0,1,3,2] if s[2]==1 else [2,3,1,0])] )
+    got_order = CyclicOrder( [t[j] for j in ([0,1,3,2] if s[2]==1 else [2,3,1,0])] )
   elif s[3] == -s[0] and s[3] != 0:
-    got_order = CycLicOrder( [t[j] for j in ([0,1,3,2] if s[3]==1 else [2,3,1,0])] )
-  #0213 and reverse
-  elif s[1] == -s[0] and s[1] != 0:
-    got_order = CycLicOrder( [t[j] for j in ([0,2,1,3] if s[3]==1 else [3,1,2,0])] )
-  elif s[2] == -s[3] and s[2] != 0:
-    got_order = CycLicOrder( [t[j] for j in ([0,2,1,3] if s[3]==1 else [3,1,2,0])] )
+    got_order = CyclicOrder( [t[j] for j in ([0,1,3,2] if s[3]==1 else [2,3,1,0])] )
+  #0312 and reverse
+  elif s[0] == -s[1] and s[0] != 0:
+    got_order = CyclicOrder( [t[j] for j in ([0,3,1,2] if s[0]==1 else [2,1,3,0])] )
+  elif s[3] == -s[2] and s[3] != 0:
+    got_order = CyclicOrder( [t[j] for j in ([0,3,1,2] if s[3]==1 else [2,1,3,0])] )
+  
+  #print "I got the order: ", str(got_order)
   
   #we didn't conclude anything
   if got_order == None:

@@ -3,6 +3,7 @@ import word
 import covering
 import fatgraph
 import ends
+import scl
 
 
 
@@ -12,11 +13,11 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
   for all the covers"""
   
   #get a list of all the covering degrees we should go through
-  if max_degee == None:
+  if max_degree == None:
     if degree_list == None:
       print "I need a max degree or degree list"
       return None
-    deg_list = degree_list_in
+    deg_list = degree_list
   else:
     deg_list = range(2,max_degree+1)
   
@@ -27,14 +28,14 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
     C = C_in
   
   #get the rank
-  rank = word.chain_rank(C)
+  rank, base_gens = word.chain_rank_and_gens(C)
   
   #get the cwd
   cur_dir = os.getcwd()
   
   #get an extremal surface
   s = scl.scl(C, 'local', ['-o', cur_dir + '/temp_extremal_surface.fg'])
-  s = Rational(s.numerator, s.denominator) #this turns it into a sage thing
+  s = Rational(str(s.numerator)+'/'+str(s.denominator)) #this turns it into a sage thing
   F = fatgraph.read_file(cur_dir + '/temp_extremal_surface.fg')
   
   if verbose > 1:
@@ -50,21 +51,26 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
   for deg in deg_list:
     #go through all possible permuations for all the generators
     #i.e. all covering spaces (ouch)
-    P = Permutations(deg).list()
+    P = Permutations(range(deg)).list()
     T = Tuples(P, rank)
-    base_gens = word.alphabet[:rank]
+    cover_rank = 1+deg*rank-deg
     if verbose > 2:
       for t in T:
+        print t
         G = covering.FISubgroup(base_gens, t)
         print "Found covering subgroup ", G
+        if not G.connected:
+          print "Not a connected cover"
+          continue
         GF = F.lift(G)
         print "Found lifted fatgraph: "
         print(GF)
+        GF.write_file_new('temp_lifted_fatgraph.fg')
         GFE = GF.ends()
         print "Found end list: ", GFE
-        GFE_listed = [e.lift(G) for e in GFE]
+        GFE_lifted = [[e.lift(G) for e in EL] for EL in GFE]
         print "Found the lifted end list: ", GFE_lifted
-        compat_orders = compatible_cyclic_orders(GFE_lifted, rank)
+        compat_orders = ends.compatible_cyclic_orders(GFE_lifted, cover_rank)
         print "Found compatible cyclic orders: ", compat_orders
         if len(compat_orders) != 0:
           print "*** good transfer ", (t, G, compat_orders)
@@ -74,7 +80,8 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
         G = covering.FISubgroup(base_gens, t)
         GF = F.lift(G)
         GFE = GF.ends()
-        compat_orders = ends.compatible_cyclic_orders(GFE, rank)
+        GFE_lifted = [[e.lift(G) for e in EL] for EL in GFE]
+        compat_orders = ends.compatible_cyclic_orders(GFE, cover_rank)
         if len(compat_orders) != 0:
           if verbose > 1:
             print "*** good transfer ", (t, G, compat_orders)
