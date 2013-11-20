@@ -62,7 +62,9 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
         print(GF)
         GFE = GF.ends()
         print "Found end list: ", GFE
-        compat_orders = compatible_cyclic_orders(GFE)
+        GFE_listed = [e.lift(G) for e in GFE]
+        print "Found the lifted end list: ", GFE_lifted
+        compat_orders = compatible_cyclic_orders(GFE_lifted, rank)
         print "Found compatible cyclic orders: ", compat_orders
         if len(compat_orders) != 0:
           print "*** good transfer ", (t, G, compat_orders)

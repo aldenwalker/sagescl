@@ -43,16 +43,32 @@ class FreeGroupEnd:
           return ''.join([self.get_letter(i) for i in xrange(n.start, n.stop)])
     return self.get_letter(n)
   
+  def simplify(self):
+    core, core_prefix = cyc_red_get_conjugate(self.repeat)
+    ppre = multiply_words(self.prefix, core_prefix)
+    if ppre == '':
+      return FreeGroupEnd('', core)
+    while ppre[-1] == core[0].swapcase():
+      ppre = word.multiply_words(ppre, core)
+    return FreeGroupEnd(ppre, core)
+
+  def lift(self, G):
+    """lift the end to the FISubgroup G.  It needs to be the case 
+    that the prefix and repeat are words in G"""
+    new_pref = G.rewrite_word_from_base_gens(self.prefix) 
+    new_rep = G.rewrite_word_from_base_gens(self.repeat)
+    return FreeGroupEnd(new_pref, new_rep).simplify()
+
   def ap_morph(self, phi):
     ppre = phi.ap(self.prefix)
     prea = phi.ap(self.repeat)
-    core, core_prefix = cyc_red_get_conjugate(prea)
+    core, core_prefix = word.cyc_red_get_conjugate(prea)
     ppre = multiply_words(ppre, core_prefix)
     if ppre == '':
-      return End('', core)
+      return FreeGroupEnd('', core)
     while ppre[-1] == core[0].swapcase():
       ppre += core
-    return End(ppre, core)
+    return FreeGroupEnd(ppre, core)
 
 
 def find_all_suborders(EL):
@@ -131,7 +147,7 @@ def compatible_cyclic_orders(EL, rank=None):
   
   #now we need to build up the consequences
   #by continuing to scan through the unknown guys until we can conclude nothing else
-  while True:
+  while len(known_4_tuple_orders)>0:
     did_something = False
     for i in xrange(len(unknown_4_subsets)-1, -1, -1):
       got_order = cyclic_order.four_tuple_from_cyclic_orders(unknown_4_subsets[i], known_4_tuple_orders)
@@ -144,7 +160,7 @@ def compatible_cyclic_orders(EL, rank=None):
     if not did_something:
       break
 
-  print "Found the known 4 tuples: ", known_4_tuple_orders
+  #print "Found the known 4 tuples: ", known_4_tuple_orders
 
   #now we need to extend what we have to a cyclic order
   #there might be some tripods in the original thing, 

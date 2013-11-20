@@ -75,6 +75,7 @@ class CyclicOrder:
 def multiple_cyclic_order_eval(t, CO_list) :
   t0, t1, t2 = t
   ords = set([O(t0, t1, t2) for O in CO_list])
+  #print "Got orders ", ords, " for tripod ", (t0, t1, t2), " under orders: ", CO_list
   if 1 in ords:
     if -1 in ords:
       return None
@@ -116,12 +117,27 @@ def four_tuple_from_cyclic_orders(t, CO_list):
       return None
   return got_order
 
+def sorted_partial_order(L, f):
+  """sorts L relative to the function f, where 
+  f(x,y) < 0 if x < y, ==0 if equal or unknown, and 
+  f(x,y) > 0 if x > y.  it basically has to be insertion sort"""
+  LL = list(L)
+  for i in xrange(1,len(L)):
+    j=i-1
+    while j >= 0 and f(LL[j], LL[j+1]) >= 0:
+      temp = LL[j+1]
+      LL[j+1] = LL[j]
+      LL[j] = temp
+      j -= 1
+  return LL
+    
+
 def extend_suborders_to_order(rank, T):
-  print "Called to extend the orders: ", T
+  #print "Called to extend the orders: ", T
   gens = word.alphabet[:rank]
   gens += [x.swapcase() for x in gens]
   def cmp_rel_gen0(g1, g2):
     return multiple_cyclic_order_eval([gens[0], g2, g1], T)
-  gens = sorted(gens, cmp=cmp_rel_gen0)
-  print "Sorted order to ", gens
+  gens = [gens[0]] + sorted_partial_order(gens[1:], cmp_rel_gen0)
+  #print "Sorted order to ", gens
   return CyclicOrder(gens)

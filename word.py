@@ -106,9 +106,9 @@ def cyc_red_get_conjugate(w):
   i=0
   Lw = len(w)
   hLw = Lw/2
-  while i < hLw and w[i] == w[-(i+1)]:
+  while i < hLw and w[i] == w[-(i+1)].swapcase():
     i+=1
-  return (w[i:-i], w[:i])
+  return ( (w[i:-i], w[:i]) if i>0 else (w, '') )
 
 def sign(letter):
   if letter.isupper():
