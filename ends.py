@@ -113,41 +113,47 @@ def compatible_cyclic_orders(EL, rank=None):
     return []
   SO_lens = map(len, SO)
   
-  #now we must assemble the suborders
-  #start with the largest (why not), and then iteratively
-  #try to add more by searching for other orders which contain things 
-  #on the boundary
-  big_ind = SO_lens.index(max(SO_lens))
-  current_order = SO[ big_ind ]
-  del SO[big_ind]
+  #we check all the 4-tuples
+  gens = word.alphabet[:rank]
+  gens += [g.swapcase() for g in gens]
+  unknown_4_subsets = list(Subsets(gens, 4))
+  known_4_tuple_orders = []
+  
+  #get all the 4-tuples that we can from the orders that we have
+  for i in xrange(len(uknown_4_subsets)-1, -1, -1):
+    got_order = cyclic_order.four_tuple_from_cyclic_orders(unknown_4_subsets[i], SO)
+    if got_order == None:
+      return []
+    if got_order != False:
+      del unknown_4_subsets[i]
+      known_4_tuple_orders.append(got_order)
+  
+  #now we need to build up the consequences
+  #by continuing to scan through the unknown guys until we can conclude nothing else
   while True:
-    #for each pair on the boundary
-    added_something = False
-    for i in xrange(len(current_order)-1):
-      p1 = current_order[i]
-      p2 = current_order[i+1]
-      #find it in the other orders
-      for so in SO:
-        if p1 in so and p2 in so:
-          subslice = so[p1:p2][1:]
-          if len(subslice) == 0:
-            continue
-          #test if it's ok
-          for g in subslice:
-            if current_order(p1, g, p2) != 0: #we can't possibly have a compatible order
-              return []
-          current_order.insert(p1, subslice)
-          added_something=True
-          break
-      if added_something:
-        break
-    if not added_something:
+    did_something = False
+    for i in xrange(len(unknown_4_subsets)-1, -1, -1):
+      got_order = cyclic_order.four_tuple_from_cyclic_orders(unknown_4_subsets[i], known_4_tuple_orders)
+      if got_order == None:
+        return []
+      if got_order != False:
+        did_something = True
+        del unknown_4_subsets[i]
+        known_4_tuple_orders.append(got_order)
+    if not did_something:
       break
   
-  #now we've got the largest thing we can build
-  #any cyclic order which is an extension of this is acceptable
-  current_order.extend_to_full_gen_order(R)
-  return current_order
+  #now we need to extend what we have to a cyclic order
+  CO = cyclic_order.extend_suborders_to_order(R, known_4_tuple_orders)
+  return [CO]
+  
+  
+  
+  
+  
+  
+  
+  
   
   
   
