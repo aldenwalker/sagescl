@@ -43,6 +43,8 @@ def scl(chain, mode='local', args=[], return_fraction=True):
     mout = sca.communicate()[0]
   if return_fraction:
     dat = mout.split(' ')[-3]
+    if dat == 'feasible':
+      raise NameError('No feasible solution found')
     return fractions.Fraction(dat)
   else:
     dat = mout.split(' ')[-1]

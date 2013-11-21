@@ -73,15 +73,28 @@ class FreeGroupEnd:
 def find_all_suborders(EL):
   """returns a list of cyclic orders, each coming from a vertex in the 
   tree of ends"""
-  #get a list of all the unique letters
+  
+  #first, if all the first letters are the same, remove them
   LEL = len(EL)
+  if LEL == 1:
+    return []
+  i=0
+  while all([EL[0][i]==e[i] for e in EL]):
+    i += 1
+  #print "Found they agree for ", i, " characters"
+  if i > 0:
+    return find_all_suborders([e[i:None] for e in EL] + [EL[0][i-1].swapcase()])
+  
+  #now shift the ends around so that no letter shows up at the end and 
+  #beginning
   gen_list = [(e[0],i) for i,e in enumerate(EL)]
   i=0
   while i<LEL-1 and gen_list[i][0] == gen_list[i+1][0]:
     i += 1
-  if i == LEL-1:
-    return find_all_suborders([e[1:] for e in EL] + [EL[0][0].swapcase()])
   gen_list = gen_list[i+1:] + gen_list[:i+1]
+  
+  #print "Gen list: ", gen_list
+  
   #now the gen list ends and begins with different gens, so each 
   #should show up in at most one run
   reduced_gen_list = []
@@ -102,11 +115,11 @@ def find_all_suborders(EL):
   for g in reduced_gen_dict:
     if len(reduced_gen_dict[g]) == 1:
       continue
-    new_EL = [EL[i][1::] for i in reduced_gen_dict[g]] + [g.swapcase()]
-    sub_COs += find_all_suborders(new_EL)
-  
-  if [] in sub_COs:
-    return []
+    new_EL = [EL[i] for i in reduced_gen_dict[g]]
+    sub_CO = find_all_suborders(new_EL)
+    if sub_CO == []:
+      return []
+    sub_COs += sub_CO
   
   if len(our_CO) > 2:
     return [our_CO] + sub_COs

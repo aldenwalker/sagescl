@@ -5,7 +5,8 @@ import fatgraph
 import ends
 import scl
 
-
+def frac_to_sage_Rational(x):
+  return Rational(str(x.numerator) + '/' + str(x.denominator))
 
 def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
   """given a chain, try to find an extremal rot transfer.  This will 
@@ -81,6 +82,13 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
         if len(compat_orders) != 0:
           print "*** good transfer ", (t, G, compat_orders)
           found_transfers.append((t, G, compat_orders))
+          if verbose > 1:
+            print "Double checking rot = ", compat_orders[0].rot(G.lift(C))
+          if compat_orders[0].rot(G.lift(C)) != 2*deg*s:
+            print "Rot isn't extremal?"
+            print "C = ", C
+            print "G = ", G
+            print "O = ", compat_orders[0]
           num_good_transfers += 1
     else:
       for t in T:
@@ -93,9 +101,15 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
         GFE_lifted = [[e.lift(G) for e in EL] for EL in GFE]
         compat_orders = ends.compatible_cyclic_orders(GFE_lifted, cover_rank)
         if len(compat_orders) != 0:
+          found_transfers.append((t, G, compat_orders))
           if verbose > 1:
             print "*** good transfer ", (t, G, compat_orders)
-          found_transfers.append((t, G, compat_orders))
+            print "Double checking rot = ", compat_orders[0].rot(G.lift(C))
+          if compat_orders[0].rot(G.lift(C)) != 2*deg*s:
+            print "Rot isn't extremal?"
+            print "C = ", C
+            print "G = ", G
+            print "O = ", compat_orders[0]
           num_good_transfers += 1
     if verbose>1:
       print "For this degree (", deg, "):"
@@ -105,13 +119,67 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
   return found_transfers
 
 
-def find_transfer_families(n, ntrials, rank=2):
+def find_transfer_families(n, ntrials, rank=2, verbose=1):
   found_transfer_families = []
-  for i in xrange(itrials):
-    F = random_family(n, rank)
-    s = scl.scl(F(1))
+  for i in xrange(ntrials):
+    F = word.random_family(n, rank)
+    if verbose>1:
+      print "\nTrying family: ", F
+    transfers = []
+    N = 1
+    while True:
+      try:
+        s = frac_to_sage_Rational(scl.scl(F(N)))
+      except:
+        if verbose > 1:
+          print "Scl computation failed"
+        break
+      min_cover_deg = (s.denominator()/2 if s.denominator()%2 == 0 else s.denominator())
+      if verbose > 1:
+        print "Trying F(" +  str(N) +  ") = " + str(F(N))
+        print "scl = ", s
+        print "Min cover degree: ", min_cover_deg
+      
+      if N>2 and min_cover_deg == 1:
+        if verbose > 1:
+          print "Family scl isn't getting complicated"
+        break
+      if N>10:
+        if verbose>1:
+          print "Family is getting too complicated"
+        break
+      if min_cover_deg > 4:
+        if verbose > 1:
+          print "Min cover degree ", min_cover_deg, " is too big"
+        break
+      
+      if verbose>1:
+        print "Finding extremal transfers at degree: ", [min_cover_deg]
+      T = find_extremal_transfer(F(N), degree_list=[min_cover_deg])
+      
+      if len(T) > 0:
+        if verbose>1:
+          print "Found ", len(T), " good transfers"
+        transfers.append(T)
+        N += 1
+      else:
+        break
     
-  return None
+    if len(transfers) == 1 and transfers[0][0][1].degree == 1:
+      #don't record this
+      if verbose > 1:
+        print "We only found an extremal basic rot"
+      continue
+    elif len(transfers) == 0:
+      if verbose>1:
+        print "We found no transfers"
+      continue
+    
+    if verbose>1:
+      print "We found some good transfers"
+    found_transfer_families.append( ( F, transfers ) )
+      
+  return found_transfer_families
 
 
 

@@ -748,29 +748,73 @@ def random_hom_triv_chain(n, Rank=2, Gens=None):
       pos = outgoing_positions[pos[0]][pos[1]]
       pos = (pos[0], gen_perms[pos[0]][pos[1]])
     chain.append(output_word)
-  chain = list(set([min_cyclic(cyc_red(x)) for x in chain]))
-  chain = [x for x in chain if min_cyclic(inverse(x)) not in chain]
+    
+  #print "Chain before messing: ", chain
+  chain = scl_reduce(chain)
   if gen_translation != None:
     chain = [ ''.join([gen_translation[x] for x in c]) for c in chain]
+  #print "Chain after messing: ", chain
+  return chain
+
+def scl_reduce(C):
+  chain = [min_cyclic(cyc_red(x)) for x in C]
+  chain = [power_reduce(x) for x in chain]
+  chain_words = [x[0] for x in chain]
+  chain_powers = [x[1] for x in chain]
+  LC = len(chain)
+  for i in xrange(LC):
+    for j in xrange(i+1, LC):
+      if chain_words[i] == chain_words[j]:
+        chain_powers[i] += chain_powers[j]
+        chain_powers[j] = 0
+  #now there's no duplicates
+  for i in xrange(LC):
+    try:
+      j = chain_words.index(inverse(chain_words[i]))
+      if chain_powers[i] >= chain_powers[j]:
+        chain_powers[i] -= chain_powers[j]
+        chain_powers[j] = 0
+    except:
+      pass
+  chain = [chain_powers[i]*chain_words[i] for i in xrange(len(chain_powers)) if chain_powers[i]>0]
   return chain
 
 
 class FreeGroupFamily:
-  def __init__(self, C, w1, w2):
+  def __init__(self, C, w1, i1, w2, i2):
+    #print "Making family from ", C, w1, i1, w2, i2
     self.C = C
-    self.W1 = w1
-    self.W2 = w2
+    self.w1 = w1
+    self.i1 = i1
+    self.w2 = w2
+    self.i2 = i2
     
   def __repr__(self):
-    return ' + '.join(self.C) + (' + ' if len(self.C)>0 else '')  + self.W1[0] + '^n' + self.W1[1:] + ' + ' + self.W2[0] + '^n' + self.W2[1:]
+    if self.w1 != self.w2:
+      W1 = self.C[self.w1][:self.i1] + self.C[self.w1][self.i1] + '^n' + self.C[self.w1][self.i1+1:]
+      W2 = self.C[self.w2][:self.i2] + self.C[self.w2][self.i2] + '^n' + self.C[self.w2][self.i2+1:]
+      return ' + '.join([self.C[i] for i in xrange(len(self.C)) if i != self.w1 and i != self.w2] + [W1] + [W2])
+    else:
+      i = min(self.i1, self.i2)
+      I = max(self.i1, self.i2)
+      W = self.C[self.w1][:i] + self.C[self.w1][i] + '^n' + self.C[self.w1][i+1:I] + self.C[self.w1][I] + '^n' + self.C[self.w1][I+1:]
+      return ' + '.join([self.C[j] for j in xrange(len(self.C)) if j != self.w1] + [W])
 
   def __call__(self, n):
-    return self.C + [ n*self.W1[0] + self.W1[1:] ] + [ n*self.W2[0] + self.W2[1:] ]
-  
+    if self.w1 != self.w2:
+      W1 = self.C[self.w1][:self.i1] + n*self.C[self.w1][self.i1] + self.C[self.w1][self.i1+1:]
+      W2 = self.C[self.w2][:self.i2] + n*self.C[self.w2][self.i2] + self.C[self.w2][self.i2+1:]
+      return [self.C[i] for i in xrange(len(self.C)) if i != self.w1 and i != self.w2] + [W1] + [W2]
+    else:
+      i = min(self.i1, self.i2)
+      I = max(self.i1, self.i2)
+      W = self.C[self.w1][:i] + n*self.C[self.w1][i] + self.C[self.w1][i+1:I] + n*self.C[self.w1][I] + self.C[self.w1][I+1:]
+      return [self.C[j] for j in xrange(len(self.C)) if j != self.w1] + [W]  
 
 
 def random_family(n,rank=2, gens=None):
   C = random_hom_triv_chain(n,rank,gens)
+  #print "Making random family from ", C
   LC = len(C)
   w1 = RAND.choice(xrange(LC))
   i1 = RAND.choice(xrange(len(C[w1])))
@@ -779,70 +823,11 @@ def random_family(n,rank=2, gens=None):
   while C[w1][i1] != C[w2][i2].swapcase():
     w2 = RAND.choice(xrange(LC))
     i2 = RAND.choice(xrange(len(C[w2])))
-  C2 = [C[w] for w in xrange(LC) if w != w1 and w != w2]
-  W1 = C[w1][i1:] + C[w1][:i1]
-  W2 = C[w2][i2:] + C[w2][:i2]
-  return FreeGroupFamily(C2, W1, W2)
+  return FreeGroupFamily(C, w1, i1, w2, i2)
     
 
 
-def dummy_func():
-  gens = alphabet[:rank]
-  all_gens = gens + inverse(gens)
-  gen_indices = dict([(all_gens[i], i) for i in xrange(len(all_gens))])
-  LW = len(words)
-  ngens = len(all_gens)
-  #choose the number of letters of each kind
-  gen_counts = [0 for i in xrange(rank)]
-  for i in xrange((n/2)+1):
-    gen_counts[RAND.choice(xrange(rank))] += 1
-  letter_vector = gen_counts + gen_counts #this counts all the letters
-  #these record which positions are connected to where
-  outgoing_positions = [ [None for j in xrange(letter_vector[i])] for i in xrange(ngens)]
-  incoming_positions = [ [None for j in xrange(letter_vector[i])] for i in xrange(ngens)]
-  #these record the indices that we can't connect
-  inverse_positions = [all_gens.index(g.swapcase()) for g in all_gens]
-  #these record the available positions -- this is slow
-  available_outgoing_positions = [(i,j) for i in xrange(ngens) for j in xrange(letter_vector[i])]
-  available_incoming_positions = [(i,j) for i in xrange(ngens) for j in xrange(letter_vector[i])]
-  while len(available_outgoing_positions) > 0:
-    #choose an available outgoing position
-    k1 = RAND.choice(xrange(len(available_outgoing_positions)))
-    (i1,j1) = available_outgoing_positions[k1]
-    while True:
-      lai = len(available_incoming_positions)
-      k2 = RAND.choice(xrange(lai))
-      (i2,j2) = available_incoming_positions[k2]
-      if inverse_positions[i1] != i2:
-        break
-    outgoing_positions[i1][j1] = (i2, j2)
-    incoming_positions[i2][j2] = (i1, j1)
-    del available_outgoing_positions[k1]
-    del available_incoming_positions[k2]
-  #now we could choose a random permutation, but I think we don't need this?
-  is_position_done = [ [False for j in xrange(letter_vector[i])] for i in xrange(ngens)]
-  chain = []
-  while True:
-    start_pos = None
-    for i in xrange(ngens):
-      try:
-        j = is_position_done[i].index(False)
-        start_pos = (i,j)
-        break
-      except:
-        pass
-    if start_pos == None:
-      break
-    output_word = all_gens[start_pos[0]]
-    is_position_done[start_pos[0]][start_pos[1]] = True
-    pos = outgoing_positions[start_pos[0]][start_pos[1]]
-    while pos != start_pos:
-      output_word += all_gens[pos[0]]
-      is_position_done[pos[0]][pos[1]] = True
-      pos = outgoing_positions[pos[0]][pos[1]]
-    chain.append(output_word)
 
-  return chain
   
 def random_word_with_hom_image(n, rank, hom_image) :
   if (n - sum([abs(x) for x in hom_image]) ) % 2 != 0:
