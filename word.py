@@ -694,8 +694,79 @@ def old_random_hom_triv_chain(n, maxWords, rank=2):
   return words
 
 def random_hom_triv_chain(n, rank=2):
+
   gens = alphabet[:rank]
-  words = all_words_of_len(2, gens)
+  all_gens = gens + inverse(gens)
+  gen_indices = dict([(all_gens[i], i) for i in xrange(len(all_gens))])
+  ngens = len(all_gens)
+  #get a random word
+  W = random_hom_triv_cyc_red_word(n, rank)
+  #reassemble it
+  outgoing_positions = [ [] for i in xrange(ngens)]
+  start_pos = (gen_indices[W[0]], 0)
+  for i in xrange(len(W)-1):
+    #make a spot for our current position
+    outgoing_positions[gen_indices[W[i]]].append(None)
+    target_gen_len = len(outgoing_positions[gen_indices[W[i+1]]])
+    outgoing_positions[gen_indices[W[i]]][-1] = (gen_indices[W[i+1]], target_gen_len)  
+  #add the last one
+  outgoing_positions[gen_indices[W[-1]]].append(start_pos)
+  #apply some perumations
+  gen_perms = [ Permutations(range(len(outgoing_positions[i]))).random_element() for i in xrange(ngens)]
+  #follow it around
+  is_position_done = [ [False for j in xrange(len(outgoing_positions[i]))] for i in xrange(ngens)]
+  chain = []
+  while True:
+    start_pos = None
+    for i in xrange(ngens):
+      try:
+        j = is_position_done[i].index(False)
+        start_pos = (i,j)
+        break
+      except:
+        pass
+    if start_pos == None:
+      break
+    output_word = all_gens[start_pos[0]]
+    is_position_done[start_pos[0]][start_pos[1]] = True
+    pos = outgoing_positions[start_pos[0]][start_pos[1]]
+    pos = (pos[0], gen_perms[pos[0]][pos[1]])
+    while pos != start_pos:
+      #print "Current pos: ", pos
+      #print "Start pos: ", start_pos
+      #print "Current output word: ", output_word
+      output_word += all_gens[pos[0]]
+      is_position_done[pos[0]][pos[1]] = True
+      pos = outgoing_positions[pos[0]][pos[1]]
+      pos = (pos[0], gen_perms[pos[0]][pos[1]])
+    chain.append(output_word)
+  chain = list(set([min_cyclic(cyc_red(x)) for x in chain]))
+  chain = [x for x in chain if min_cyclic(inverse(x)) not in chain]
+  return chain
+
+
+
+def random_family(n,rank):
+  C = random_hom_triv_chain(n,rank)
+  LC = len(C)
+  w1 = RAND.choice(xrange(LC))
+  i1 = RAND.choice(xrange(len(C[w1])))
+  w2 = RAND.choice(xrange(LC))
+  i2 = RAND.choice(xrange(len(C[w2])))
+  while C[w1][i1] != C[w2][i2].swapcase():
+    w2 = RAND.choice(xrange(LC))
+    i2 = RAND.choice(xrange(len(C[w2])))
+  C2 = [C[w] for w in xrange(LC) if w != w1 and w != w2]
+  W1 = C[w1][i1:] + C[w1][:i1]
+  W2 = C[w2][i2:] + C[w2][:i2]
+  def f(n):
+    return C2 + [ n*W1[0] + W1 ] + [ n*W2[0] + W2 ]
+  return f
+    
+
+
+def dummy_func():
+  gens = alphabet[:rank]
   all_gens = gens + inverse(gens)
   gen_indices = dict([(all_gens[i], i) for i in xrange(len(all_gens))])
   LW = len(words)
