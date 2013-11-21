@@ -693,9 +693,17 @@ def old_random_hom_triv_chain(n, maxWords, rank=2):
   
   return words
 
-def random_hom_triv_chain(n, rank=2):
-
+def random_hom_triv_chain(n, Rank=2, Gens=None):
+  
+  if Gens == None:
+    rank = Rank
+    gen_translation = None
+  else:
+    rank = len(Gens)
+    gen_translation = dict( [(alphabet[i], Gens[i]) for i in xrange(rank)] \
+                           +[(alphabet[i].swapcase(), Gens[i].swapcase()) for i in xrange(rank)] ) 
   gens = alphabet[:rank]
+    
   all_gens = gens + inverse(gens)
   gen_indices = dict([(all_gens[i], i) for i in xrange(len(all_gens))])
   ngens = len(all_gens)
@@ -742,12 +750,27 @@ def random_hom_triv_chain(n, rank=2):
     chain.append(output_word)
   chain = list(set([min_cyclic(cyc_red(x)) for x in chain]))
   chain = [x for x in chain if min_cyclic(inverse(x)) not in chain]
+  if gen_translation != None:
+    chain = [ ''.join([gen_translation[x] for x in c]) for c in chain]
   return chain
 
 
+class FreeGroupFamily:
+  def __init__(self, C, w1, w2):
+    self.C = C
+    self.W1 = w1
+    self.W2 = w2
+    
+  def __repr__(self):
+    return ' + '.join(self.C) + (' + ' if len(self.C)>0 else '')  + self.W1[0] + '^n' + self.W1[1:] + ' + ' + self.W2[0] + '^n' + self.W2[1:]
 
-def random_family(n,rank):
-  C = random_hom_triv_chain(n,rank)
+  def __call__(self, n):
+    return self.C + [ n*self.W1[0] + self.W1[1:] ] + [ n*self.W2[0] + self.W2[1:] ]
+  
+
+
+def random_family(n,rank=2, gens=None):
+  C = random_hom_triv_chain(n,rank,gens)
   LC = len(C)
   w1 = RAND.choice(xrange(LC))
   i1 = RAND.choice(xrange(len(C[w1])))
@@ -759,9 +782,7 @@ def random_family(n,rank):
   C2 = [C[w] for w in xrange(LC) if w != w1 and w != w2]
   W1 = C[w1][i1:] + C[w1][:i1]
   W2 = C[w2][i2:] + C[w2][:i2]
-  def f(n):
-    return C2 + [ n*W1[0] + W1 ] + [ n*W2[0] + W2 ]
-  return f
+  return FreeGroupFamily(C2, W1, W2)
     
 
 

@@ -105,6 +105,13 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
   return found_transfers
 
 
+def find_transfer_families(n, ntrials, rank=2):
+  found_transfer_families = []
+  for i in xrange(itrials):
+    F = random_family(n, rank)
+    s = scl.scl(F(1))
+    
+  return None
 
 
 
