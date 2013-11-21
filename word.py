@@ -695,7 +695,7 @@ def old_random_hom_triv_chain(n, maxWords, rank=2):
 
 def random_hom_triv_chain(n, rank=2):
   gens = alphabet[:rank]
-  words = all_words_of_len(gens, 2)
+  words = all_words_of_len(2, gens)
   all_gens = gens + inverse(gens)
   gen_indices = dict([(all_gens[i], i) for i in xrange(len(all_gens))])
   LW = len(words)
@@ -703,7 +703,7 @@ def random_hom_triv_chain(n, rank=2):
   #choose the number of letters of each kind
   gen_counts = [0 for i in xrange(rank)]
   for i in xrange((n/2)+1):
-    gen_counts[RAND.choice(xrange(ngens))] += 1
+    gen_counts[RAND.choice(xrange(rank))] += 1
   letter_vector = gen_counts + gen_counts #this counts all the letters
   #these record which positions are connected to where
   outgoing_positions = [ [None for j in xrange(letter_vector[i])] for i in xrange(ngens)]
@@ -711,8 +711,8 @@ def random_hom_triv_chain(n, rank=2):
   #these record the indices that we can't connect
   inverse_positions = [all_gens.index(g.swapcase()) for g in all_gens]
   #these record the available positions -- this is slow
-  available_outgoing_positions = [(i,j) for i in ngens for j in xrange(letter_vector[i])]
-  available_incoming_positions = [(i,j) for i in ngens for j in xrange(letter_vector[i])]
+  available_outgoing_positions = [(i,j) for i in xrange(ngens) for j in xrange(letter_vector[i])]
+  available_incoming_positions = [(i,j) for i in xrange(ngens) for j in xrange(letter_vector[i])]
   while len(available_outgoing_positions) > 0:
     #choose an available outgoing position
     k1 = RAND.choice(xrange(len(available_outgoing_positions)))
@@ -720,7 +720,7 @@ def random_hom_triv_chain(n, rank=2):
     while True:
       lai = len(available_incoming_positions)
       k2 = RAND.choice(xrange(lai))
-      (i2,j2) = available+incoming_positions[k2]
+      (i2,j2) = available_incoming_positions[k2]
       if inverse_positions[i1] != i2:
         break
     outgoing_positions[i1][j1] = (i2, j2)
@@ -728,10 +728,29 @@ def random_hom_triv_chain(n, rank=2):
     del available_outgoing_positions[k1]
     del available_incoming_positions[k2]
   #now we could choose a random permutation, but I think we don't need this?
-  
+  is_position_done = [ [False for j in xrange(letter_vector[i])] for i in xrange(ngens)]
+  chain = []
+  while True:
+    start_pos = None
+    for i in xrange(ngens):
+      try:
+        j = is_position_done[i].index(False)
+        start_pos = (i,j)
+        break
+      except:
+        pass
+    if start_pos == None:
+      break
+    output_word = all_gens[start_pos[0]]
+    is_position_done[start_pos[0]][start_pos[1]] = True
+    pos = outgoing_positions[start_pos[0]][start_pos[1]]
+    while pos != start_pos:
+      output_word += all_gens[pos[0]]
+      is_position_done[pos[0]][pos[1]] = True
+      pos = outgoing_positions[pos[0]][pos[1]]
+    chain.append(output_word)
 
-  
-  
+  return chain
   
 def random_word_with_hom_image(n, rank, hom_image) :
   if (n - sum([abs(x) for x in hom_image]) ) % 2 != 0:
