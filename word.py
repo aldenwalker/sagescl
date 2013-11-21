@@ -705,8 +705,29 @@ def random_hom_triv_chain(n, rank=2):
   for i in xrange((n/2)+1):
     gen_counts[RAND.choice(xrange(ngens))] += 1
   letter_vector = gen_counts + gen_counts #this counts all the letters
-  
-#choose a permutation for all the letters
+  #these record which positions are connected to where
+  outgoing_positions = [ [None for j in xrange(letter_vector[i])] for i in xrange(ngens)]
+  incoming_positions = [ [None for j in xrange(letter_vector[i])] for i in xrange(ngens)]
+  #these record the indices that we can't connect
+  inverse_positions = [all_gens.index(g.swapcase()) for g in all_gens]
+  #these record the available positions -- this is slow
+  available_outgoing_positions = [(i,j) for i in ngens for j in xrange(letter_vector[i])]
+  available_incoming_positions = [(i,j) for i in ngens for j in xrange(letter_vector[i])]
+  while len(available_outgoing_positions) > 0:
+    #choose an available outgoing position
+    k1 = RAND.choice(xrange(len(available_outgoing_positions)))
+    (i1,j1) = available_outgoing_positions[k1]
+    while True:
+      lai = len(available_incoming_positions)
+      k2 = RAND.choice(xrange(lai))
+      (i2,j2) = available+incoming_positions[k2]
+      if inverse_positions[i1] != i2:
+        break
+    outgoing_positions[i1][j1] = (i2, j2)
+    incoming_positions[i2][j2] = (i1, j1)
+    del available_outgoing_positions[k1]
+    del available_incoming_positions[k2]
+  #now we could choose a random permutation, but I think we don't need this?
   
 
   
