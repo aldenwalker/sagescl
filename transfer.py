@@ -54,6 +54,9 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
     P = Permutations(range(deg)).list()
     T = Tuples(P, rank)
     cover_rank = 1+deg*rank-deg
+    if verbose>1:
+      print "Doing degree: ", deg
+      print "There are ",T.cardinality(), " covers to do"
     if verbose > 2:
       for t in T:
         print t
@@ -78,10 +81,12 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
     else:
       for t in T:
         G = covering.FISubgroup(base_gens, t)
+        if not G.connected:
+          continue
         GF = F.lift(G)
         GFE = GF.ends()
         GFE_lifted = [[e.lift(G) for e in EL] for EL in GFE]
-        compat_orders = ends.compatible_cyclic_orders(GFE, cover_rank)
+        compat_orders = ends.compatible_cyclic_orders(GFE_lifted, cover_rank)
         if len(compat_orders) != 0:
           if verbose > 1:
             print "*** good transfer ", (t, G, compat_orders)

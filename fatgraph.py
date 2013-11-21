@@ -1486,7 +1486,7 @@ class Fatgraph:
     self.comb()
     #get all the edge paths from the vertices to the basepoint
     edge_paths = self.all_edge_paths_from_basepoint_to_verts()
-    print "Edge paths: ", edge_paths
+    #print "Edge paths: ", edge_paths
     end_list = []
     for base_p in self.basepoints:
       edge_stack = self.V[base_p].edges[::-1] #careful of the order!
