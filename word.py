@@ -668,7 +668,7 @@ def random_cyc_red_word(n, rank=2):
 
   
   
-def random_hom_triv_chain(n, maxWords, rank=2):
+def old_random_hom_triv_chain(n, maxWords, rank=2):
   wordLens = []
   s = 0
   for i in xrange(maxWords-1):
@@ -692,6 +692,24 @@ def random_hom_triv_chain(n, maxWords, rank=2):
       words = [cyc_red(random_reduced_word(x, rank)) for x in wordLens]
   
   return words
+
+def random_hom_triv_chain(n, rank=2):
+  gens = alphabet[:rank]
+  words = all_words_of_len(gens, 2)
+  all_gens = gens + inverse(gens)
+  gen_indices = dict([(all_gens[i], i) for i in xrange(len(all_gens))])
+  LW = len(words)
+  ngens = len(all_gens)
+  #choose the number of letters of each kind
+  gen_counts = [0 for i in xrange(rank)]
+  for i in xrange((n/2)+1):
+    gen_counts[RAND.choice(xrange(ngens))] += 1
+  letter_vector = gen_counts + gen_counts #this counts all the letters
+  
+#choose a permutation for all the letters
+  
+
+  
   
   
 def random_word_with_hom_image(n, rank, hom_image) :

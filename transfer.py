@@ -54,6 +54,8 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
     P = Permutations(range(deg)).list()
     T = Tuples(P, rank)
     cover_rank = 1+deg*rank-deg
+    num_non_connected = 0
+    num_good_transfers = 0
     if verbose>1:
       print "Doing degree: ", deg
       print "There are ",T.cardinality(), " covers to do"
@@ -63,6 +65,7 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
         G = covering.FISubgroup(base_gens, t)
         print "Found covering subgroup ", G
         if not G.connected:
+          num_non_connected += 1
           print "Not a connected cover"
           continue
         GF = F.lift(G)
@@ -78,10 +81,12 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
         if len(compat_orders) != 0:
           print "*** good transfer ", (t, G, compat_orders)
           found_transfers.append((t, G, compat_orders))
+          num_good_transfers += 1
     else:
       for t in T:
         G = covering.FISubgroup(base_gens, t)
         if not G.connected:
+          num_non_connected += 1
           continue
         GF = F.lift(G)
         GFE = GF.ends()
@@ -91,7 +96,12 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
           if verbose > 1:
             print "*** good transfer ", (t, G, compat_orders)
           found_transfers.append((t, G, compat_orders))
-
+          num_good_transfers += 1
+    if verbose>1:
+      print "For this degree (", deg, "):"
+      print "Num covers: ", T.cardinality()
+      print "Num connected: ", T.cardinality() - num_non_connected
+      print "Num transfers found: ", num_good_transfers 
   return found_transfers
 
 
