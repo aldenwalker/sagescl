@@ -8,7 +8,7 @@ import scl
 def frac_to_sage_Rational(x):
   return Rational(str(x.numerator) + '/' + str(x.denominator))
 
-def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
+def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1, fatgraph_size_bound=None):
   """given a chain, try to find an extremal rot transfer.  This will 
   take a whole bunch of covers and then look through all *basic* rots 
   for all the covers"""
@@ -39,6 +39,11 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
   s = Rational(str(s.numerator)+'/'+str(s.denominator)) #this turns it into a sage thing
   F = fatgraph.read_file(cur_dir + '/temp_extremal_surface.fg')
   
+  if fatgraph_size_bound != None and len(F.V) > fatgraph_size_bound:
+    if verbose>1:
+      print "The original fatgraph is above the size bound"
+    return []
+
   if verbose > 1:
     print "Got scl = ", s
     if verbose > 2:
@@ -89,6 +94,7 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
             print "C = ", C
             print "G = ", G
             print "O = ", compat_orders[0]
+            return []
           num_good_transfers += 1
     else:
       for t in T:
@@ -110,6 +116,7 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1):
             print "C = ", C
             print "G = ", G
             print "O = ", compat_orders[0]
+            return []
           num_good_transfers += 1
     if verbose>1:
       print "For this degree (", deg, "):"
@@ -155,7 +162,7 @@ def find_transfer_families(n, ntrials, rank=2, verbose=1):
       
       if verbose>1:
         print "Finding extremal transfers at degree: ", [min_cover_deg]
-      T = find_extremal_transfer(F(N), degree_list=[min_cover_deg])
+      T = find_extremal_transfer(F(N), degree_list=[min_cover_deg], fatgraph_size_bound=50)
       
       if len(T) > 0:
         if verbose>1:

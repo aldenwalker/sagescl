@@ -101,6 +101,7 @@ def multiple_cyclic_order_eval(t, CO_list) :
   t0, t1, t2 = t
   ords = set([O(t0, t1, t2) for O in CO_list])
   #print "Got orders ", ords, " for tripod ", (t0, t1, t2), " under orders: ", CO_list
+  #print "Multiple cyclic order eval ", (t0, t1, t2), ":", ords
   if 1 in ords:
     if -1 in ords:
       return None
@@ -150,6 +151,7 @@ def sorted_partial_order(L, f):
   f(x,y) < 0 if x < y, ==0 if equal or unknown, and 
   f(x,y) > 0 if x > y.  it basically has to be insertion sort"""
   LL = list(L)
+  print LL
   for i in xrange(1,len(L)):
     j=i-1
     while j >= 0 and f(LL[j], LL[j+1]) >= 0:
@@ -157,15 +159,73 @@ def sorted_partial_order(L, f):
       LL[j+1] = LL[j]
       LL[j] = temp
       j -= 1
+    print LL
   return LL
     
 
-def extend_suborders_to_order(rank, T):
-  #print "Called to extend the orders: ", T
+def extend_suborders_to_order_old(rank, T):
+  print "Called to extend the orders: ", T
   gens = word.alphabet[:rank]
   gens += [x.swapcase() for x in gens]
   def cmp_rel_gen0(g1, g2):
     return multiple_cyclic_order_eval([gens[0], g2, g1], T)
   gens = [gens[0]] + sorted_partial_order(gens[1:], cmp_rel_gen0)
-  #print "Sorted order to ", gens
+  print "Sorted order to ", gens
   return CyclicOrder(gens)
+
+def extend_suborders_to_order(rank, T):
+  """extend suborders to a valid order.  This assumes the orders are compatible; 
+  the result is undefined if they are not"""
+  print "Called to extend the orders: ", T
+  gens = word.alphabet[:rank]
+  gens += [x.swapcase() for x in gens]
+  #take one of the orders to extend
+  current_order = T[0]
+  undone_gens = [g for g in gens if g not in current_order]
+  while True:
+    print "Current order: ", current_order
+    #print "Undone gens: ", undone_gens
+    #find a gen that we know about
+    did_something = False
+    i = 0
+    while i < len(undone_gens):
+      g = undone_gens[i]
+      fit_gen = False
+      for j in xrange(len(current_order)):
+        g1 = current_order[j]
+        g2 = current_order[j+1]
+        if 1 == multiple_cyclic_order_eval([g1, g, g2], T):
+          #print "Adding ", g, " after ", g1
+          current_order.insert(g1, g)
+          #print "After inserting: ", str(current_order)
+          del undone_gens[i]
+          did_something = True
+          fit_gen = True
+          break
+      if not fit_gen:
+        i += 1
+    if not did_something:
+      #we need to add a generator arbitrarily
+      if len(undone_gens) == 0:
+        break
+      g = undone_gens.pop()
+      #print "Adding ", g, " to wherever it fits"
+      for j in xrange(len(current_order)):
+        good_spot = True
+        for k in xrange(len(current_order)):
+          for ell in xrange(k+1, len(current_order)):
+            if -1 == multiple_cyclic_order_eval([g, current_order[j+k+1], current_order[j+ell+1]], T):
+              good_spot = False
+              break
+          if not good_spot:
+            break
+        if good_spot:
+          #print "Adding ", g, " in spot ", j
+          current_order.insert(j, g)
+          break
+      if not good_spot:
+        print "We didn't find a spot when we should have"
+        return None
+  #the order should be done
+  return current_order
+        

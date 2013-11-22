@@ -44,11 +44,13 @@ class FreeGroupEnd:
     return self.get_letter(n)
   
   def simplify(self):
+    self.prefix = word.word_reduce(self.prefix)
+    self.repeat = word.word_reduce(self.repeat)
     core, core_prefix = word.cyc_red_get_conjugate(self.repeat)
     ppre = word.multiply_words(self.prefix, core_prefix)
     if ppre == '':
       return FreeGroupEnd('', core)
-    while ppre[-1] == core[0].swapcase():
+    while len(ppre) > 0 and ppre[-1] == core[0].swapcase():
       ppre = word.multiply_words(ppre, core)
     return FreeGroupEnd(ppre, core)
 
@@ -133,7 +135,8 @@ def compatible_cyclic_orders(EL, rank=None):
   """return a list of the cyclic orders compatible with the 
   given cyclically ordered set of ends"""
   if rank==None:
-    R = word.chain_rank([e.get_word() for e in EL])
+    if type(EL[0]) == list:
+      R = max([word.chain_rank([e.get_word() for e in E]) for E in EL])
   else:
     R = rank
   
@@ -142,13 +145,16 @@ def compatible_cyclic_orders(EL, rank=None):
   if type(EL[0]) == list:
     SO = []
     for e in EL:
-      SO += find_all_suborders(e)
+      local_orders = find_all_suborders(e)
+      if local_orders == []:
+        return []
+      SO += local_orders
   else:
     SO = find_all_suborders(EL)
   if SO == []:
     return []
   
-  #print "Found all the suborders: ", SO
+  print "Found all the suborders: ", SO
   
   #we check all the 4-tuples
   gens = word.alphabet[:R]
@@ -182,7 +188,7 @@ def compatible_cyclic_orders(EL, rank=None):
     if not did_something:
       break
 
-  #print "Found the known 4 tuples: ", known_4_tuple_orders
+  print "Found the known 4 tuples: ", known_4_tuple_orders
 
   #now we need to extend what we have to a cyclic order
   #there might be some tripods in the original thing, 

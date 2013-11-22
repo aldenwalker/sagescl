@@ -110,6 +110,18 @@ def cyc_red_get_conjugate(w):
     i+=1
   return ( (w[i:-i], w[:i]) if i>0 else (w, '') )
 
+def word_reduce(w):
+  w2 = str(w)
+  i=0
+  while i < len(w2)-1:
+    if w2[i] == w2[i+1].swapcase():
+      w2 = w2[:i] + w2[i+2:]
+      if i>0:
+        i-=1
+    else:
+      i += 1
+  return w2
+
 def sign(letter):
   if letter.isupper():
     return -1
