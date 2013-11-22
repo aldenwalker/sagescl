@@ -278,6 +278,34 @@ class Fatgraph:
     if maintain_watch_edges:
       self.watch_edges = [[dest_edges[w] for w in W] for W in self.watch_edges]
 
+  def compress_edge(self, ei):
+    """compress an edge, coalescing the two adjacent vertices
+    the vertices lose all basepoint, etc, decoration"""
+    e = self.E[ei]
+    v0i = e.source
+    v0 = self.V[v0i]
+    v0ei = v0.find_edge_ind( ei, True )
+    v1i = e.dest
+    v1 = self.V[v1i]
+    v1ei = v1.find_edge_ind( ei, False )
+    new_v0_edges = v0.edges[v0ei+1:] + v0.edges[:v0ei]
+    new_v1_edges = v1.edges[v1ei+1:] + v1.edges[:v1ei]
+    new_edges = new_v0_edges + new_v1_edges
+    new_vertex = Vertex(new_edges)
+    new_vertex_ind = len(self.V)
+    self.V.append(new_vertex)
+    for e2i, d2 in new_edges:
+      if d2:
+        self.E[e2i].source = new_vertex_ind
+      else:
+        self.E[e2i].dest = new_vertex_ind
+    v0.dead = True
+    v1.dead = True
+    e.dead = True
+    self.cleanup()
+    
+
+
   def comb(self): 
     """alters the .towards_basepoint fields of the edges to give a spanning tree"""
     if len(self.V) == 0:
@@ -1467,13 +1495,26 @@ class Fatgraph:
     
     F = Fatgraph(new_verts, new_edges)
     
-    F.comb()
+    #ok, except now we need to relabel it and compress edges that don't do anything
+    for e in F.E:
+      vi = e.source
+      v_sheet = F.V[vi].sheet
+      new_label = G.rewrite_path_from_base_gens(e.label_forward, start_vert=v_sheet)
+      e.label_forward = new_label
+      e.label_backward = new_label.swapcase()
     
-    #for the basepoints, provide a path to the origin in the covering group
-    #as written as a word in the base group
-    for vi in F.basepoints:
-      #print "Lifting basepoint ", vi, " which is in sheet ", F.V[vi].sheet, " so path to covering basepoint is ", G.paths_to_0[F.V[vi].sheet]
-      F.V[vi].path_to_covering_basepoint = G.paths_to_0[F.V[vi].sheet]
+    #compress all the edges that are blank
+    while True:
+      did_something = False
+      for i in xrange(len(F.E)):
+        if F.E[i].label_forward == '':
+          F.compress_edge(i)
+          did_something = True
+          break
+      if not did_something:
+        break
+    
+    F.comb()
     
     return F
   

@@ -36,6 +36,20 @@ class CyclicOrder:
   def __contains__(self, x):
     return x in self.indices
   
+  def is_compatible(self, other):
+    """determines whether every triple in both either doesn't appear in the 
+    other or is correctly ordered"""
+    s1 = all([other(self.CO[i], self.CO[j], self.CO[k]) in [0,1] for i in xrange(self.L)      \
+                                                                 for j in xrange(i+1, self.L) \
+                                                                 for k in xrange(j+1, self.L)])
+    if not s1:
+      return False
+    s2 = all([self(other.CO[i], other.CO[j], other.CO[k]) in [0,1] for i in xrange(other.L)      \
+                                                                   for j in xrange(i+1, other.L) \
+                                                                   for k in xrange(j+1, other.L)])
+    return s2
+    
+
   def insert(self, location, subslice):
     if type(location) == str:
       loc = self.indices[location]
@@ -62,6 +76,34 @@ class CyclicOrder:
   def __len__(self):
     return self.L
   
+  def in_order(self, L):
+    """determines whether the list of words or ends is in order"""
+    i=0
+    while all([w[i] == L[0][i] for w in L]):
+      i+=1
+    if i > 0:
+      return self.in_order([w[i:None] for w in L])
+    LL = list(L)
+    while LL[0][0] == LL[-1][0]:
+      LL = LL[1:None] + LL[None:1]
+    letter_list = []
+    letter_dict_positions = {}
+    for i in xrange(len(LL)):
+      if LL[i][0] in letter_dict_positions:
+        if letter_dict_positions[LL[i][0]][-1] != i-1:
+          return False
+        letter_dict_positions[LL[i][0]].append(i)
+      else:
+        letter_list.append(LL[i][0])
+        letter_dict_positions[LL[i][0]] = [i]
+    #look at the first letters
+    O = CyclicOrder(letter_list)
+    if not self.is_compatible(O):
+      return False
+    return all([ self.in_order([LL[i] for i in letter_dict_positions[g]]) for g in letter_dict_positions if len(letter_dict_positions[g])>1]) 
+    
+    
+
   def step(self, a,b,c):
     """return the number of steps from a to b, without crossing c"""
     ai = self.indices[a]
@@ -176,14 +218,14 @@ def extend_suborders_to_order_old(rank, T):
 def extend_suborders_to_order(rank, T):
   """extend suborders to a valid order.  This assumes the orders are compatible; 
   the result is undefined if they are not"""
-  print "Called to extend the orders: ", T
+  #print "Called to extend the orders: ", T
   gens = word.alphabet[:rank]
   gens += [x.swapcase() for x in gens]
   #take one of the orders to extend
   current_order = T[0]
   undone_gens = [g for g in gens if g not in current_order]
   while True:
-    print "Current order: ", current_order
+    #print "Current order: ", current_order
     #print "Undone gens: ", undone_gens
     #find a gen that we know about
     did_something = False
@@ -227,5 +269,6 @@ def extend_suborders_to_order(rank, T):
         print "We didn't find a spot when we should have"
         return None
   #the order should be done
+  #print "Check current order is compatible: ", str(all([current_order.is_compatible(t) for t in T]))
   return current_order
         

@@ -8,7 +8,7 @@ import scl
 def frac_to_sage_Rational(x):
   return Rational(str(x.numerator) + '/' + str(x.denominator))
 
-def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1, fatgraph_size_bound=None):
+def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1, fatgraph_size_bound=None, just_one=False):
   """given a chain, try to find an extremal rot transfer.  This will 
   take a whole bunch of covers and then look through all *basic* rots 
   for all the covers"""
@@ -80,12 +80,11 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1, f
         GF.write_file_new('temp_lifted_fatgraph.fg')
         GFE = GF.ends()
         print "Found end list: ", GFE
-        GFE_lifted = [[e.lift(G) for e in EL] for EL in GFE]
-        print "Found the lifted end list: ", GFE_lifted
-        compat_orders = ends.compatible_cyclic_orders(GFE_lifted, cover_rank)
+        compat_orders = ends.compatible_cyclic_orders(GFE, cover_rank)
         print "Found compatible cyclic orders: ", compat_orders
         if len(compat_orders) != 0:
           print "*** good transfer ", (t, G, compat_orders)
+          GF.write_file_new('temp_good_transfer_fg.fg')
           found_transfers.append((t, G, compat_orders))
           if verbose > 1:
             print "Double checking rot = ", compat_orders[0].rot(G.lift(C))
@@ -96,6 +95,8 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1, f
             print "O = ", compat_orders[0]
             return []
           num_good_transfers += 1
+          if just_one:
+            return found_transfers
     else:
       for t in T:
         G = covering.FISubgroup(base_gens, t)
@@ -104,8 +105,7 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1, f
           continue
         GF = F.lift(G)
         GFE = GF.ends()
-        GFE_lifted = [[e.lift(G) for e in EL] for EL in GFE]
-        compat_orders = ends.compatible_cyclic_orders(GFE_lifted, cover_rank)
+        compat_orders = ends.compatible_cyclic_orders(GFE, cover_rank)
         if len(compat_orders) != 0:
           found_transfers.append((t, G, compat_orders))
           if verbose > 1:
@@ -118,6 +118,8 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1, f
             print "O = ", compat_orders[0]
             return []
           num_good_transfers += 1
+          if just_one:
+            return found_transfers
     if verbose>1:
       print "For this degree (", deg, "):"
       print "Num covers: ", T.cardinality()
@@ -126,10 +128,53 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1, f
   return found_transfers
 
 
-def find_transfer_families(n, ntrials, rank=2, verbose=1):
+def single_transfer(C, G, verbose=1):
+  #get the rank
+  rank, base_gens = word.chain_rank_and_gens(C)
+  
+  #get the cwd
+  cur_dir = os.getcwd()
+  
+  #get an extremal surface
+  s = scl.scl(C, 'local', ['-o', cur_dir + '/temp_extremal_surface.fg'])
+  s = Rational(str(s.numerator)+'/'+str(s.denominator)) #this turns it into a sage thing
+  F = fatgraph.read_file(cur_dir + '/temp_extremal_surface.fg')
+  
+  #lift the fatgraph
+  GF = F.lift(G)
+  if verbose>1:
+    print "Found lifted fatgraph: "
+    if verbose>2:
+      print(GF)
+    GF.write_file_new('temp_lifted_fatgraph.fg')
+  GFE = GF.ends()
+  if verbose>1:
+    print "Found lifted end list: ", GFE
+  compat_orders = ends.compatible_cyclic_orders(GFE, G.rank)
+  if verbose>1:
+    print "Found compatible cyclic orders: ", compat_orders
+    GF.write_file_new('temp_good_transfer_fg.fg')
+    if verbose > 1:
+      print "Double checking rot = ", compat_orders[0].rot(G.lift(C))
+  if len(compat_orders)>1:
+    if compat_orders[0].rot(G.lift(C)) != 2*deg*s:
+        print "Rot isn't extremal?"
+        print "C = ", C
+        print "G = ", G
+        print "O = ", compat_orders[0]
+        return []
+  return compat_orders
+
+
+
+def find_transfer_families(n, ntrials, rank=2, \
+                           cover_deg_bound=4,  \
+                           fatgraph_size_bound=50, \
+                           covers_to_try=None,
+                           verbose=1):
   found_transfer_families = []
   for i in xrange(ntrials):
-    F = word.random_family(n, rank)
+    F = word.random_family(n, rank, gens=['x','y'])
     if verbose>1:
       print "\nTrying family: ", F
     transfers = []
@@ -155,14 +200,14 @@ def find_transfer_families(n, ntrials, rank=2, verbose=1):
         if verbose>1:
           print "Family is getting too complicated"
         break
-      if min_cover_deg > 4:
+      if cover_deg_bound > 4:
         if verbose > 1:
           print "Min cover degree ", min_cover_deg, " is too big"
         break
       
       if verbose>1:
         print "Finding extremal transfers at degree: ", [min_cover_deg]
-      T = find_extremal_transfer(F(N), degree_list=[min_cover_deg], fatgraph_size_bound=50)
+      T = find_extremal_transfer(F(N), degree_list=[min_cover_deg], covers_to_try=covers_to_try, fatgraph_size_bound=fatgraph_size_bound, just_one=True)
       
       if len(T) > 0:
         if verbose>1:
@@ -172,10 +217,10 @@ def find_transfer_families(n, ntrials, rank=2, verbose=1):
       else:
         break
     
-    if len(transfers) == 1 and transfers[0][0][1].degree == 1:
+    if all([t[0][1].degree==1 for t in transfers]):
       #don't record this
       if verbose > 1:
-        print "We only found an extremal basic rot"
+        print "We only found extremal basic rots"
       continue
     elif len(transfers) == 0:
       if verbose>1:
@@ -190,17 +235,86 @@ def find_transfer_families(n, ntrials, rank=2, verbose=1):
 
 
 
+def random_transfers(n, rank, ntrials, verbose=1):
+  """take lots of random chains, and if the denominator is in the 
+  appropriate range, try to find a transfer"""
+  results_by_denominator = {}
+  for i in xrange(ntrials):
+    C = word.random_hom_triv_chain(n, rank)
+    if verbose>1:
+      print "Trying: ", C
+    try:
+        s = frac_to_sage_Rational(scl.scl(C))
+    except:
+      if verbose > 1:
+        print "Scl computation failed"
+      continue
+    min_cover_deg = (s.denominator()/2 if s.denominator()%2 == 0 else s.denominator())
+    if verbose>1:
+      print "scl = ", s, "; min cover: ", min_cover_deg
+    if min_cover_deg > 4:
+      if verbose > 1:
+        print "Min cover degree is too big"
+      continue
+    T = find_extremal_transfer(C, degree_list=[min_cover_deg], fatgraph_size_bound=80, just_one=True)
+    if len(T)>0:
+      if verbose>1:
+        print "Found transfer"
+      if s.denominator() in results_by_denominator:
+        results_by_denominator[s.denominator()][0] += 1
+        results_by_denominator[s.denominator()][1].append(C)
+      else:
+        results_by_denominator[s.denominator()] = [1, [C]]
+    else:
+      if s.denominator() in results_by_denominator:
+        results_by_denominator[s.denominator()][0] += 1
+      else:
+        results_by_denominator[s.denominator()] = [1, []]
+  return results_by_denominator
 
-
-
-
-
-
-
-
-
-
-
-
-
+def cyclic_transfer_families(n, rank, ntrials, family_bound=8, cover_degree_bound=9, verbose=1):
+  gens = word.alphabet[:rank]
+  found_transfers = []
+  for i in xrange(ntrials):
+    F = word.random_family(n, rank)
+    family_transfers = []
+    if verbose>1:
+      print "Trying family", F
+    N=1
+    while True:
+      try:
+        s = frac_to_sage_Rational(scl.scl(F(N)))
+      except:
+        if verbose > 1:
+          print "Scl computation failed"
+          break
+      min_cover_deg = (s.denominator()/2 if s.denominator()%2 == 0 else s.denominator())
+      if verbose>1:
+        print "N = ", N, "scl =", s, "cover degree =", min_cover_deg      
+      if N>2 and min_cover_deg==1:
+        if verbose>1:
+          print "Family isn't getting complicated"
+        break
+      if N > family_bound or min_cover_deg > cover_degree_bound:
+        if verbose>1:
+          print "Cover is too complicated"
+        break
+      perms = [range(1,min_cover_deg) + [0]] + [range(min_cover_deg) for g in xrange(rank-1)]
+      G = covering.FISubgroup(gens, perms)
+      ET = single_transfer(F(N), G)
+      if len(ET) > 0:
+        if verbose>1:
+          print "Found transfer orders: ", ET
+        family_transfers.append( (N, ET) )
+        N += 1
+      else:
+        break
+    if family_transfers != []:
+      found_transfers.append( (F, family_transfers) )
+  return found_transfers
       
+      
+      
+
+
+

@@ -826,6 +826,8 @@ class FreeGroupFamily:
 
 def random_family(n,rank=2, gens=None):
   C = random_hom_triv_chain(n,rank,gens)
+  while len(C) == 0:
+    C = random_hom_triv_chain(n,rank,gens)
   #print "Making random family from ", C
   LC = len(C)
   w1 = RAND.choice(xrange(LC))
