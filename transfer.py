@@ -312,7 +312,20 @@ def cyclic_transfer_families(n, rank, ntrials, family_bound=8, cover_degree_boun
     if family_transfers != []:
       found_transfers.append( (F, family_transfers) )
   return found_transfers
-      
+
+
+def cyclic_cover_vertices(F, G):
+  """returns a list of (cyclic order, path order to basepoint) for the vertices, 
+  recording the cyclic order on the edges, plus the number of "y"s (or whatever 
+  generator goes to the generator of the cyclic group) needed to get to the vertex"""
+  F.comb()
+  vert_words = [F.word_from_basepoint_to_vert(vi) for vi in xrange(len(F.V))]
+  vert_orders = F.vertex_cyclic_orders()
+  for i in xrange(len(G.base_gens)):
+    if G.base_gen_actions[i] != range(G.degree):
+      cyclic_gen = G.base_gens[i]
+  vert_word_images = [(w.count(cyclic_gen) - w.count(cyclic_gen.swapcase()))%G.degree for w in vert_words]
+  return [(vert_orders[i], vert_word_images[i]) for i in xrange(len(F.V))]
       
       
 

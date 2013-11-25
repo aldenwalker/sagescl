@@ -5,6 +5,7 @@ from word import *
 from sage.all import *
 import covering
 import ends
+import cyclic_order
 
 import copy
 
@@ -116,7 +117,6 @@ class Vertex:
   
   def num_edges(self):
     return len(self.edges)
-    
 
 
 def full_fiber_product(F,G):
@@ -199,6 +199,10 @@ class Fatgraph:
         ans.append( self.E[i].label_backward )
     return ans
   
+  def vertex_cyclic_orders(self):
+    return [cyclic_order.CyclicOrder(self.outgoing_labels(vi)) for vi in xrange(len(self.V))]
+
+
   def path_has_good_partition(self, vi, paths_in):
     """determine if the parts of the path passing through vert vi
     can be broken up into a good collection"""
@@ -377,8 +381,14 @@ class Fatgraph:
         break
     return [(e, not d) for (e,d) in ans[::-1]]
   
+  def word_from_basepoint_to_vert(self, vi):
+    """return an (unreduced!) word from the basepoint to the vertex
+    (requires a combing)"""
+    ep = self.edge_path_from_basepoint_to_vert(vi)
+    return ''.join([(self.E[ei].label_forward if d else self.E[ei].label_backward) for (ei, e) in ep])
+
   def all_edge_paths_from_basepoint_to_verts(self):
-    """returns a list of the edge paths to the basepoint for every vertex
+    """returns a list of the edge paths from the basepoint for every vertex
     (this is faster than calling the above function for every vertex"""
     edge_paths = [None for i in xrange(len(self.V))]
     #edge_paths[self.basepoint] = []
