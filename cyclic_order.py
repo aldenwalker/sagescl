@@ -5,9 +5,11 @@ import word
 class CyclicOrder:
   def __init__(self, inp):
     if type(inp) == str:
-      self.CO = inp
+      self.CO = word.min_cyclic(inp)
+    elif isinstance(inp, CyclicOrder):
+      self.CO = inp.CO
     else:
-      self.CO = ''.join(inp)
+      self.CO = word.min_cyclic(''.join(inp))
     self.L = len(self.CO)
     self.indices = dict([(g,i) for (i,g) in enumerate(self.CO)])
     
@@ -17,6 +19,10 @@ class CyclicOrder:
   
   def __str__(self):
     return self.CO
+  
+  def __iter__(self):
+    for g in self.CO:
+      yield g
   
   def __getitem__(self, n):
     if type(n) == slice:
@@ -272,3 +278,69 @@ def extend_suborders_to_order(rank, T):
   #print "Check current order is compatible: ", str(all([current_order.is_compatible(t) for t in T]))
   return current_order
         
+
+def all_order_extensions(rank, T):
+  """Extend suborders to all possible extensions.  Note there might 
+  sbe factorially many"""
+  #print "Called to extend the orders in all possible ways: ", T
+  gens = word.alphabet[:rank]
+  gens += [x.swapcase() for x in gens]
+  #take one of the orders to extend
+  current_order = T[0]
+  undone_gens = [g for g in gens if g not in current_order]
+  while True:
+    #print "Current order: ", current_order
+    #print "Undone gens: ", undone_gens
+    #find a gen that we know about
+    did_something = False
+    i = 0
+    while i < len(undone_gens):
+      g = undone_gens[i]
+      fit_gen = False
+      for j in xrange(len(current_order)):
+        g1 = current_order[j]
+        g2 = current_order[j+1]
+        if 1 == multiple_cyclic_order_eval([g1, g, g2], T):
+          #print "Adding ", g, " after ", g1
+          current_order.insert(g1, g)
+          #print "After inserting: ", str(current_order)
+          del undone_gens[i]
+          did_something = True
+          fit_gen = True
+          break
+      if not fit_gen:
+        i += 1
+    if not did_something:
+      #we need to add a generator arbitrarily
+      if len(undone_gens) == 0:
+        break
+      suborders = []
+      for g in undone_gens:
+        #print "Adding ", g, " to wherever it fits"
+        found_at_least_one_spot = False
+        for j in xrange(len(current_order)):
+          good_spot = True
+          for k in xrange(len(current_order)):
+            for ell in xrange(k+1, len(current_order)):
+              if -1 == multiple_cyclic_order_eval([g, current_order[j+k+1], current_order[j+ell+1]], T):
+                good_spot = False
+                break
+            if not good_spot:
+              break
+          #we scanned through the other positions looking for a contradiction
+          if good_spot: # we did find a spot to put it
+            found_at_least_one_spot = True
+            g_inserted_order = CyclicOrder(current_order)
+            g_inserted_order.insert(j, g)
+            suborders += all_order_extensions(rank, [g_inserted_order] + T)
+        if not found_at_least_one_spot:
+          print "We didn't find a spot when we should have"
+          return None
+      #now we've got all the suborders
+      return suborders
+  #the order should be done
+  #print "Check current order is compatible: ", str(all([current_order.is_compatible(t) for t in T]))
+  return [current_order]
+        
+
+

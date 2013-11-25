@@ -135,7 +135,15 @@ def runs(w):
     s += 1
   return s
 
-  
+def count_prefixes(w, p):
+  """count the number of prefixes of p in w"""
+  i=0
+  n=0
+  LP = len(p)
+  while w[i:i+LP] == p:
+    i += LP
+    n += 1
+  return n
 
     
 def cyclic_subword(w, i, L):

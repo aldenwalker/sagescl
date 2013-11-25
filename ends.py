@@ -135,7 +135,7 @@ def find_all_suborders(EL):
   
   
   
-def compatible_cyclic_orders(EL, rank=None):
+def compatible_cyclic_orders(EL, rank=None, all_orders=False):
   """return a list of the cyclic orders compatible with the 
   given cyclically ordered set of ends"""
   if rank==None:
@@ -200,8 +200,11 @@ def compatible_cyclic_orders(EL, rank=None):
   #there might be some tripods in the original thing, 
   #and we should include those
   SO_tripods = [O for O in SO if len(O)==3]
-  CO = cyclic_order.extend_suborders_to_order(R, SO_tripods + known_4_tuple_orders)
-  return [CO]
+  if all_orders:
+    CO = cyclic_order.all_order_extensions(R, SO_tripods + known_4_tuple_orders)
+  else:
+    CO = [ cyclic_order.extend_suborders_to_order(R, SO_tripods + known_4_tuple_orders) ]
+  return CO
   
   
   

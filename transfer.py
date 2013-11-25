@@ -5,6 +5,12 @@ import fatgraph
 import ends
 import scl
 
+def rotate_min_first(L):
+  LL = len(L)
+  mL = min(L)
+  mLi = L.index(mL)
+  return L[mLi:] + L[:mLi]
+
 def frac_to_sage_Rational(x):
   return Rational(str(x.numerator) + '/' + str(x.denominator))
 
@@ -128,7 +134,7 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1, f
   return found_transfers
 
 
-def single_transfer(C, G, verbose=1):
+def single_transfer(C, G, verbose=1, all_orders=False):
   #get the rank
   rank, base_gens = word.chain_rank_and_gens(C)
   
@@ -150,14 +156,14 @@ def single_transfer(C, G, verbose=1):
   GFE = GF.ends()
   if verbose>1:
     print "Found lifted end list: ", GFE
-  compat_orders = ends.compatible_cyclic_orders(GFE, G.rank)
+  compat_orders = ends.compatible_cyclic_orders(GFE, G.rank, all_orders=all_orders)
   if verbose>1:
     print "Found compatible cyclic orders: ", compat_orders
     GF.write_file_new('temp_good_transfer_fg.fg')
     if verbose > 1:
       print "Double checking rot = ", compat_orders[0].rot(G.lift(C))
-  if len(compat_orders)>1:
-    if compat_orders[0].rot(G.lift(C)) != 2*deg*s:
+  if len(compat_orders)>0:
+    if compat_orders[0].rot(G.lift(C)) != 2*G.degree*s:
         print "Rot isn't extremal?"
         print "C = ", C
         print "G = ", G
@@ -272,6 +278,36 @@ def random_transfers(n, rank, ntrials, verbose=1):
         results_by_denominator[s.denominator()] = [1, []]
   return results_by_denominator
 
+
+def is_cyclic_cover_order(G, O):
+  """returns true iff the order corresponds to a cyclic order 
+  of a bunch of copies of the rose translated along by the 
+  cyclic generator"""
+  if G.degree == 1:
+    return False
+  for i in xrange(len(G.base_gens)):
+    if G.base_gen_actions[i] != range(G.degree):
+      cyclic_base_gen_i = i
+      break
+  cyclic_base_gen = G.base_gens[cyclic_base_gen_i]
+  gen_prefix_amounts = [word.count_prefixes(w, cyclic_base_gen) for w in G.gens_in_base_group()]
+  gen_prefix_amounts = [gpa%G.degree for gpa in gen_prefix_amounts] #make them all positive
+  order_pa_list = [gen_prefix_amounts[G.gens.index(gco.lower())] for gco in O]
+  #we must ensure that the order is monotone -- it goes up, then down
+  order_pa_list = rotate_min_first(order_pa_list)
+  direction = 'up'
+  L = len(order_pa_list)
+  i=0
+  while i<L-1:
+    if direction=='up' and order_pa_list[i] > order_pa_list[i+1]:
+      direction = 'down'
+    elif direction=='down' and order_pa_list[i] < order_pa_list[i+1]:
+      return False
+    i+=1
+  return True
+      
+    
+
 def cyclic_transfer_families(n, rank, ntrials, family_bound=8, cover_degree_bound=9, verbose=1):
   gens = word.alphabet[:rank]
   found_transfers = []
@@ -301,7 +337,12 @@ def cyclic_transfer_families(n, rank, ntrials, family_bound=8, cover_degree_boun
         break
       perms = [range(1,min_cover_deg) + [0]] + [range(min_cover_deg) for g in xrange(rank-1)]
       G = covering.FISubgroup(gens, perms)
-      ET = single_transfer(F(N), G)
+      ET = single_transfer(F(N), G, all_orders=True)
+      if verbose>1:
+        print "Found all orders: ",ET
+      ET = [et for et in ET if is_cyclic_cover_order(G, et)]
+      if verbose>1:
+        print "Found cyclic cover orders:", ET
       if len(ET) > 0:
         if verbose>1:
           print "Found transfer orders: ", ET
