@@ -16,6 +16,17 @@ SCABBLEDIR = '/home/akwalker/Documents/software/scabble/'
 GALLOPDIR = '/home/akwalker/Documents/software/gallop/'
 
 
+def scl_surface(chain, args=[]):
+  """calls scallop -local and gets the fatgraph surface"""
+  
+  cur_dir = os.getcwd()
+  
+  #get an extremal surface
+  s = scl(chain, args=args + ['-o', cur_dir + '/temp_fatgraph.fg'])
+  F = fatgraph.read_file(cur_dir + '/temp_fatgraph.fg')
+  return F
+
+
 def scl(chain, mode='local', args=[], return_fraction=True):
 
   if chain == '' or chain == ['']:

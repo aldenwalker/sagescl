@@ -385,7 +385,7 @@ class Fatgraph:
     """return an (unreduced!) word from the basepoint to the vertex
     (requires a combing)"""
     ep = self.edge_path_from_basepoint_to_vert(vi)
-    return ''.join([(self.E[ei].label_forward if d else self.E[ei].label_backward) for (ei, e) in ep])
+    return ''.join([(self.E[ei].label_forward if d else self.E[ei].label_backward) for (ei, d) in ep])
 
   def all_edge_paths_from_basepoint_to_verts(self):
     """returns a list of the edge paths from the basepoint for every vertex
@@ -1469,7 +1469,7 @@ class Fatgraph:
         
     return boundaries    
   
-  def lift(self, G):
+  def lift(self, G, relabel_and_compress=True):
     """returns the fatgraph which is self lifted to the finite cover G"""
     new_verts = [Vertex(None, None) for i in xrange(G.degree*len(self.V))]
     new_edges = []
@@ -1504,7 +1504,10 @@ class Fatgraph:
           new_edges.append( Edge(source_ind, dest_ind, edge_label_f, edge_label_b) )
     
     F = Fatgraph(new_verts, new_edges)
-    
+    if not relabel_and_compress:
+      F.comb()
+      return F
+
     #ok, except now we need to relabel it and compress edges that don't do anything
     for e in F.E:
       vi = e.source
