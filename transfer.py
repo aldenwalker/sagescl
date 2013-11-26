@@ -4,6 +4,8 @@ import covering
 import fatgraph
 import ends
 import scl
+import cyclic_order
+import signal
 
 def rotate_min_first(L):
   LL = len(L)
@@ -41,9 +43,10 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1, f
   cur_dir = os.getcwd()
   
   #get an extremal surface
-  s = scl.scl(C, 'local', ['-o', cur_dir + '/temp_extremal_surface.fg'])
+  PID = os.getpid()
+  s = scl.scl(C, 'local', ['-o', cur_dir + '/temp_extremal_surface' + str(PID) + '.fg'])
   s = Rational(str(s.numerator)+'/'+str(s.denominator)) #this turns it into a sage thing
-  F = fatgraph.read_file(cur_dir + '/temp_extremal_surface.fg')
+  F = fatgraph.read_file(cur_dir + '/temp_extremal_surface' + str(PID) + '.fg')
   
   if fatgraph_size_bound != None and len(F.V) > fatgraph_size_bound:
     if verbose>1:
@@ -134,7 +137,10 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1, f
   return found_transfers
 
 
-def single_transfer(C, G, verbose=1, all_orders=False):
+def signal_handler(signum, frame):
+  raise Exception("Timed out!")
+
+def single_transfer(C, G, verbose=1, all_orders=False, time_limit=None):
   #get the rank
   rank, base_gens = word.chain_rank_and_gens(C)
   
@@ -142,9 +148,10 @@ def single_transfer(C, G, verbose=1, all_orders=False):
   cur_dir = os.getcwd()
   
   #get an extremal surface
-  s = scl.scl(C, 'local', ['-o', cur_dir + '/temp_extremal_surface.fg'])
+  PID = os.getpid()
+  s = scl.scl(C, 'local', ['-o', cur_dir + '/temp_extremal_surface' + str(PID) + '.fg'])
   s = Rational(str(s.numerator)+'/'+str(s.denominator)) #this turns it into a sage thing
-  F = fatgraph.read_file(cur_dir + '/temp_extremal_surface.fg')
+  F = fatgraph.read_file(cur_dir + '/temp_extremal_surface' + str(PID) + '.fg')
   
   #lift the fatgraph
   GF = F.lift(G)
@@ -156,7 +163,17 @@ def single_transfer(C, G, verbose=1, all_orders=False):
   GFE = GF.ends()
   if verbose>1:
     print "Found lifted end list: ", GFE
-  compat_orders = ends.compatible_cyclic_orders(GFE, G.rank, all_orders=all_orders)
+  if time_limit != None:
+    signal.signal(signal.SIGALRM, signal_handler)
+    signal.alarm(time_limit)
+    #print "Set time limit", time_limit
+  try:
+    compat_orders = ends.compatible_cyclic_orders(GFE, G.rank, all_orders=all_orders)
+  except Exception, msg:
+    print "Timed out!"
+    compat_orders = []
+  signal.alarm(0)
+  
   if verbose>1:
     print "Found compatible cyclic orders: ", compat_orders
     GF.write_file_new('temp_good_transfer_fg.fg')
@@ -279,7 +296,7 @@ def random_transfers(n, rank, ntrials, verbose=1):
   return results_by_denominator
 
 
-def is_cyclic_cover_order(G, O):
+def is_cyclic_cover_order(G, O, verbose=1):
   """returns true iff the order corresponds to a cyclic order 
   of a bunch of copies of the rose translated along by the 
   cyclic generator"""
@@ -290,11 +307,22 @@ def is_cyclic_cover_order(G, O):
       cyclic_base_gen_i = i
       break
   cyclic_base_gen = G.base_gens[cyclic_base_gen_i]
-  gen_prefix_amounts = [word.count_prefixes(w, cyclic_base_gen) for w in G.gens_in_base_group()]
+  if verbose>1:
+    print "Base gens: ", G.base_gens
+    print "Gens: ", G.gens_in_base_group()
+    print "Cyclic gen: ", cyclic_base_gen
+  gen_prefix_amounts = [word.count_prefixes(w, cyclic_base_gen) \
+                       -word.count_prefixes(w, cyclic_base_gen.swapcase()) for w in G.gens_in_base_group()]
+  if verbose>1:
+    print "Gen prefix amounts: ", gen_prefix_amounts
   gen_prefix_amounts = [gpa%G.degree for gpa in gen_prefix_amounts] #make them all positive
+  if verbose>1:
+    print "Gen prefixes, positived: ", gen_prefix_amounts
   order_pa_list = [gen_prefix_amounts[G.gens.index(gco.lower())] for gco in O]
   #we must ensure that the order is monotone -- it goes up, then down
   order_pa_list = rotate_min_first(order_pa_list)
+  if verbose>1:
+    print "Order prefix amount list, rotated", order_pa_list
   direction = 'up'
   L = len(order_pa_list)
   i=0
@@ -308,11 +336,12 @@ def is_cyclic_cover_order(G, O):
       
     
 
-def cyclic_transfer_families(n, rank, ntrials, family_bound=8, cover_degree_bound=9, verbose=1):
+def cyclic_transfer_families(n, rank, ntrials, family_bound=8, cover_degree_bound=9, time_limit=None, verbose=1):
   gens = word.alphabet[:rank]
   found_transfers = []
   for i in xrange(ntrials):
     F = word.random_family(n, rank)
+    #F = word.FreeGroupFamily(['bb','a','aBAAB'], 1, 0, 2, 2)
     family_transfers = []
     if verbose>1:
       print "Trying family", F
@@ -335,23 +364,31 @@ def cyclic_transfer_families(n, rank, ntrials, family_bound=8, cover_degree_boun
         if verbose>1:
           print "Cover is too complicated"
         break
-      perms = [range(1,min_cover_deg) + [0]] + [range(min_cover_deg) for g in xrange(rank-1)]
-      G = covering.FISubgroup(gens, perms)
-      ET = single_transfer(F(N), G, all_orders=True)
-      if verbose>1:
+      #perms = [range(1,min_cover_deg) + [0]] + [range(min_cover_deg) for g in xrange(rank-1)]
+      #G = covering.FISubgroup(gens, perms)
+      G = covering.cyclic_cover(gens, min_cover_deg)
+      ET = single_transfer(F(N), G, all_orders=True, time_limit=time_limit)
+      if verbose>2:
         print "Found all orders: ",ET
-      ET = [et for et in ET if is_cyclic_cover_order(G, et)]
-      if verbose>1:
-        print "Found cyclic cover orders:", ET
-      if len(ET) > 0:
+      cyclic_ET = [et for et in ET if is_cyclic_cover_order(G, et)]
+      if len(cyclic_ET) > 0:
         if verbose>1:
-          print "Found transfer orders: ", ET
-        family_transfers.append( (N, ET) )
+          print "Found transfer orders: ", cyclic_ET
+        family_transfers.append( (N, G, cyclic_ET) )
+        if len(cyclic_ET) > 20:
+          if verbose>1:
+            print "Too many orders!"
+          break
         N += 1
       else:
         break
     if family_transfers != []:
-      found_transfers.append( (F, family_transfers) )
+      first_degree = family_transfers[0][1].degree
+      if all([ft[1].degree == first_degree for ft in family_transfers]):
+        if verbose>1:
+          print "All are the same degree:", str([ft[1].degree for ft in family_transfers]), "; not interesting"
+      else:
+        found_transfers.append( (F, family_transfers) )
   return found_transfers
 
 

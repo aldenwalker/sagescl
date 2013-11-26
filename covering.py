@@ -220,7 +220,32 @@ class FISubgroup :
     pass
 
 
-
+def cyclic_cover(base_gens, degree):
+  """create a cyclic cover with the standard generators; 
+  the first gen in base_gens is used as the gen of the cyclic group, and 
+  it corresponds to the last gen in gens"""
+  acts = [range(1,degree) + [0]] + [range(degree) for i in xrange(len(base_gens)-1)]
+  G = FISubgroup(base_gens, acts)
+  #now we need to remake stuff so it's right
+  G.fundamental_edges = {}
+  used_gens=0
+  for i in xrange(degree):
+    G.paths_to_0[i] = i*base_gens[0]
+    for j in xrange(1, len(base_gens)):
+      this_covering_gen = word.alphabet[used_gens]
+      G.fundamental_edges[(i, base_gens[j])] = this_covering_gen
+      G.fundamental_edges[(i, base_gens[j].swapcase())] = this_covering_gen.swapcase()
+      G.gens_to_base_group[this_covering_gen] = (i*base_gens[0]) + base_gens[j] + (i*base_gens[0].swapcase())
+      G.gens_to_base_group[this_covering_gen.swapcase()] = word.inverse(G.gens_to_base_group[this_covering_gen])
+      used_gens+=1
+  #do the covering gen
+  this_covering_gen = word.alphabet[used_gens]
+  G.fundamental_edges[(degree-1, base_gens[0])] = this_covering_gen
+  G.fundamental_edges[(0, base_gens[0].swapcase())] = this_covering_gen.swapcase()
+  G.gens_to_base_group[this_covering_gen] = degree*base_gens[0]
+  G.gens_to_base_group[this_covering_gen.swapcase()] = degree*(base_gens[0].swapcase())
+  return G
+    
 
 
 

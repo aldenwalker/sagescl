@@ -212,13 +212,13 @@ def sorted_partial_order(L, f):
     
 
 def extend_suborders_to_order_old(rank, T):
-  print "Called to extend the orders: ", T
+  #print "Called to extend the orders: ", T
   gens = word.alphabet[:rank]
   gens += [x.swapcase() for x in gens]
   def cmp_rel_gen0(g1, g2):
     return multiple_cyclic_order_eval([gens[0], g2, g1], T)
   gens = [gens[0]] + sorted_partial_order(gens[1:], cmp_rel_gen0)
-  print "Sorted order to ", gens
+  #print "Sorted order to ", gens
   return CyclicOrder(gens)
 
 def extend_suborders_to_order(rank, T):
@@ -272,7 +272,7 @@ def extend_suborders_to_order(rank, T):
           current_order.insert(j, g)
           break
       if not good_spot:
-        print "We didn't find a spot when we should have"
+        #print "We didn't find a spot when we should have"
         return None
   #the order should be done
   #print "Check current order is compatible: ", str(all([current_order.is_compatible(t) for t in T]))

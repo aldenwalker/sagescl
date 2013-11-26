@@ -195,11 +195,18 @@ def compatible_cyclic_orders(EL, rank=None, all_orders=False):
       break
 
   #print "Found the known 4 tuples: ", known_4_tuple_orders
+  
+  #determine if the order can be extended (any contradictions)
+  tripods = list(SAGE.Subsets(gens, 3))
+  SO_tripods = [O for O in SO if len(O)==3]
+  everything_known = SO_tripods + known_4_tuple_orders
+  for t in tripods:
+    if None == cyclic_order.multiple_cyclic_order_eval(t, everything_known):
+      return []
 
   #now we need to extend what we have to a cyclic order
   #there might be some tripods in the original thing, 
   #and we should include those
-  SO_tripods = [O for O in SO if len(O)==3]
   if all_orders:
     CO = cyclic_order.all_order_extensions(R, SO_tripods + known_4_tuple_orders)
   else:
