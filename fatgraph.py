@@ -1394,6 +1394,26 @@ class Fatgraph:
     ind = (ind+1)%len(vert.edges)
     return vert.edges[ind][0], vert.edges[ind][1]  #it's 1- because if it's outgoing (1), then we do it forward (0)
   
+  def single_boundary(self, ei, d, mark_edges=None, get_edges=False):
+    """follows a single boundary around and returns the word.  If mark_edges is a list, 
+    it'll put "True" at the index of every edge visited (where the list is (True, False) for 
+    every edge, where the first one means traversed in the positive direction"""
+    start_e = (ei,d)
+    if mark_edges != None:
+      mark_edges[ei][(0 if d else 1)] = True
+    w = (self.E[ei].label_forward if d else self.E[ei].label_backward)
+    W = [start_e]
+    current_e = self.next_edge(ei, d)
+    while current_e != start_e:
+      if mark_edges != None:
+        mark_edges[current_e[0]][(0 if current_e[1] else 1)] = True
+      w += (self.E[current_e[0]].label_forward if current_e[1] else self.E[current_e[0]].label_backward)
+      W.append(current_e)
+      current_e = self.next_edge(*current_e)
+    if get_edges:
+      return [w, W]
+    return w
+
   def boundaries(self):
     """returns a list of the boundary words in the fatgraph"""
     edges_read_list = [[False, False] for e in self.E]
@@ -1468,6 +1488,67 @@ class Fatgraph:
       boundaries[-1] = [boundary] + boundaries[-1]
         
     return boundaries    
+
+  def boundary_runs(self, run_cutoff=None):
+    """returns a list of (w, R), where w is a reduced boundary word, and R is a 
+    list [(i,ell), ...] of all the places in that word which have a run (all two-
+    valent vertices, plus the length of such runs (ell).  Runs shorter than run_cutoff are 
+    discarded"""
+    edges_done = [[False, False] for e in self.E]
+    runs = []
+    while True:
+      did_something = False
+      for ei in xrange(len(self.E)):
+        if edges_done[ei][0] == False:
+          w = self.single_boundary(ei, True, edges_done, get_edges=True)
+          did_something = True
+          break
+        elif edges_done[ei][1] == False:
+          w = self.single_boundary(ei, False, edges_done, get_edges=True)
+          did_something = True
+          break
+      if not did_something:
+        break
+      #here we need to follow the boundary and get the runs
+      R = []
+      i=0
+      while len(self.V[(self.E[w[1][i][0]].source if w[1][i][1] else self.E[w[1][i][0]].dest)].edges) == 2:
+        i += 1
+      w[0] = w[0][i:] + w[0][:i]
+      w[1] = w[1][i:] + w[1][:i]
+      #we've rotated it so that a run begins on the 0th position
+      j = 0
+      while j < len(w[0]):
+        k=j
+        while len(self.V[(self.E[w[1][k][0]].dest if w[1][k][1] else self.E[w[1][k][0]].source)].edges) == 2:
+          k += 1
+        R.append( (j, (k-j)+1) )
+        j=k+1
+      #print "Got original runs ", R, " in word ", w
+      min_w, shift = min_cyclic_get_shift(w[0])
+      R = [ (j-shift, ell) for (j, ell) in R ]
+      #print "Shifted by ", shift, ", to get ", R
+      reduced_w, p = power_reduce(min_w)
+      lrw = len(reduced_w)
+      R = [ (j%lrw, ell) for (j, ell) in R ]
+      #print "Reduced by ", lrw, " to get ", R
+      if run_cutoff != None:
+        R = [ (j, ell) for (j, ell) in R if ell >= run_cutoff]
+      runs.append( (reduced_w, R) )
+
+    #we hve all the runs, but we should combine them
+    final_runs = {}
+    for (w, R) in runs:
+      if w in final_runs:
+        final_runs[w] += R
+      else:
+        final_runs[w] = R
+    final_runs = [(w, final_runs[w]) for w in final_runs]
+    
+    return final_runs
+          
+          
+      
   
   def lift(self, G, relabel_and_compress=True):
     """returns the fatgraph which is self lifted to the finite cover G"""

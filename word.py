@@ -223,6 +223,11 @@ def power_reduce(w):
 def min_cyclic(w):
   return min([w[i:] + w[:i] for i in xrange(len(w))])
   
+def min_cyclic_get_shift(w):
+  """returns the min cyclic word, plus the position in the original 
+  word where the min cyclic one starts"""
+  return min([ ( w[i:] + w[:i], i) for i in xrange(len(w))])
+
 def cyclically_contained(x, L):
   return min_cyclic(x) in map(min_cyclic, L)
   
