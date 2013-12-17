@@ -32,7 +32,10 @@ class CyclicOrder:
 
   def __hash__(self):
     return hash(self.CO)
- 
+  
+  def index(self, x):
+    return self.indices[x]
+  
   def __getitem__(self, n):
     if type(n) == slice:
       if type(n.start) == str:
