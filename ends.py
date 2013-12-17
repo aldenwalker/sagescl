@@ -211,6 +211,7 @@ def compatible_cyclic_orders(EL, rank=None, all_orders=False):
     CO = cyclic_order.all_order_extensions(R, SO_tripods + known_4_tuple_orders)
   else:
     CO = [ cyclic_order.extend_suborders_to_order(R, SO_tripods + known_4_tuple_orders) ]
+  #CO = list(set(CO))
   return CO
   
   

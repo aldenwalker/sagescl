@@ -691,6 +691,12 @@ def random_cyc_red_word(n, rank=2):
     w = random_reduced_word(n, rank)
   return w
 
+
+def random_thrice_punctured_sphere(n, rank=2):
+  w1 = random_reduced_word(n, rank)
+  w2 = random_reduced_word(n, rank)
+  w1w2 = inverse(multiply_words(w1, w2))
+  return [cyc_red(x) for x in [w1, w2, w1w2]]
   
   
 def old_random_hom_triv_chain(n, maxWords, rank=2):

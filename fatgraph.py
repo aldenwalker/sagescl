@@ -188,6 +188,45 @@ class Fatgraph:
     for e in self.E:
       f.write( str(e.source) + ' ' + str(e.dest) + ' ' + e.label_forward + ' ' + e.label_backward + '\n')
     f.close()
+ 
+  def write_covering_fatgraph(self, filename):
+    """If a fatgraph has .sheet data for the vertices, this prints the fatgraph 
+    to a file in which the vertices for each sheet are lined up vertically (it uses 
+    800 pixels vertically), and the sheets go horizontally (it uses 800 pixels wide)"""
+    if not all([hasattr(v,'sheet') for v in self.V]):
+      print "This function can only be called for a fatgraph with .sheet data"
+      return
+    f = open(filename, 'w')
+    #write the fatgraph as normal
+    f.write(str(len(self.V)) + ' ' + str(len(self.E)) + '\n')
+    for v in self.V:
+      f.write(str(len(v.edges)))
+      for (e,d) in v.edges:
+        signed_ind = (e+1 if d else -(e+1))
+        f.write(' ' + str(signed_ind))
+      f.write('\n')
+    for e in self.E:
+      f.write( str(e.source) + ' ' + str(e.dest) + ' ' + e.label_forward + ' ' + e.label_backward + '\n')
+    #count the number of sheets
+    num_sheets = 1
+    for v in self.V:
+      if v.sheet+1 > num_sheets:
+        num_sheets = v.sheet+1
+    #get the number of vertices in each sheet (should be the same, but no assumptions)
+    vertices_per_sheet = [0 for i in xrange(num_sheets)]
+    vertex_pos_in_sheet = [None for v in self.V]
+    for vi, v in enumerate(self.V):
+      vertex_pos_in_sheet[vi] = vertices_per_sheet[v.sheet]
+      vertices_per_sheet[v.sheet] += 1
+    h_start = 20
+    v_start = 20
+    h_step = 760/num_sheets
+    v_step = [760/vps for vps in vertices_per_sheet]
+    #write the positions to the file
+    for vi, v in enumerate(self.V):
+      f.write(str(h_start + v.sheet*h_step) + ' ' + str(v_start + vertex_pos_in_sheet[vi]*v_step[v.sheet]) + '\n')
+    f.close()
+    
     
   def outgoing_labels(self, ind):
     edges = self.V[ind].edges

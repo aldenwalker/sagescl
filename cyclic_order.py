@@ -23,7 +23,16 @@ class CyclicOrder:
   def __iter__(self):
     for g in self.CO:
       yield g
-  
+ 
+  def __eq__(self, other):
+    if isinstance(other, CyclicOrder):
+      return self.CO == other.CO
+    else:
+      return False
+
+  def __hash__(self):
+    return hash(self.CO)
+ 
   def __getitem__(self, n):
     if type(n) == slice:
       if type(n.start) == str:
@@ -337,7 +346,7 @@ def all_order_extensions(rank, T):
           print "We didn't find a spot when we should have"
           return None
       #now we've got all the suborders
-      return suborders
+      return list(set(suborders))
   #the order should be done
   #print "Check current order is compatible: ", str(all([current_order.is_compatible(t) for t in T]))
   return [current_order]

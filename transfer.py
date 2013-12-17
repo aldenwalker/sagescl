@@ -16,7 +16,7 @@ def rotate_min_first(L):
 def frac_to_sage_Rational(x):
   return Rational(str(x.numerator) + '/' + str(x.denominator))
 
-def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1, fatgraph_size_bound=None, just_one=False):
+def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1, fatgraph_size_bound=None, just_one=False, folded=False):
   """given a chain, try to find an extremal rot transfer.  This will 
   take a whole bunch of covers and then look through all *basic* rots 
   for all the covers"""
@@ -44,7 +44,7 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1, f
   
   #get an extremal surface
   PID = os.getpid()
-  s = scl.scl(C, 'local', ['-o', cur_dir + '/temp_extremal_surface' + str(PID) + '.fg'])
+  s = scl.scl(C, 'local', (['-f'] if folded else []) + ['-o', cur_dir + '/temp_extremal_surface' + str(PID) + '.fg'])
   s = Rational(str(s.numerator)+'/'+str(s.denominator)) #this turns it into a sage thing
   F = fatgraph.read_file(cur_dir + '/temp_extremal_surface' + str(PID) + '.fg')
   
@@ -169,17 +169,17 @@ def single_transfer(C, G, verbose=1, all_orders=False, time_limit=None):
     #print "Set time limit", time_limit
   try:
     compat_orders = ends.compatible_cyclic_orders(GFE, G.rank, all_orders=all_orders)
-  except Exception, msg:
+  except None: #Exception, msg:
     print "Timed out!"
     compat_orders = []
-  signal.alarm(0)
+  if time_limit!=None:
+    signal.alarm(0)
   
-  if verbose>1:
-    print "Found compatible cyclic orders: ", compat_orders
-    GF.write_file_new('temp_good_transfer_fg.fg')
-    if verbose > 1:
-      print "Double checking rot = ", compat_orders[0].rot(G.lift(C))
   if len(compat_orders)>0:
+    if verbose>1:
+      print "Found compatible cyclic orders: ", compat_orders
+      GF.write_file_new('temp_good_transfer_fg.fg')
+      print "Double checking rot = ", compat_orders[0].rot(G.lift(C))
     if compat_orders[0].rot(G.lift(C)) != 2*G.degree*s:
         print "Rot isn't extremal?"
         print "C = ", C
@@ -349,6 +349,7 @@ def cyclic_transfer_families(n, rank, ntrials, family_bound=8, cover_degree_boun
     while True:
       try:
         s = frac_to_sage_Rational(scl.scl(F(N)))
+        num_fatgraph_verts = len(scl.scl_surface(F(N)).V)
       except:
         if verbose > 1:
           print "Scl computation failed"
@@ -374,7 +375,7 @@ def cyclic_transfer_families(n, rank, ntrials, family_bound=8, cover_degree_boun
       if len(cyclic_ET) > 0:
         if verbose>1:
           print "Found transfer orders: ", cyclic_ET
-        family_transfers.append( (N, G, cyclic_ET) )
+        family_transfers.append( (N, 'fgverts: ' + str(num_fatgraph_verts), G, cyclic_ET) )
         if len(cyclic_ET) > 20:
           if verbose>1:
             print "Too many orders!"
@@ -383,10 +384,10 @@ def cyclic_transfer_families(n, rank, ntrials, family_bound=8, cover_degree_boun
       else:
         break
     if family_transfers != []:
-      first_degree = family_transfers[0][1].degree
-      if all([ft[1].degree == first_degree for ft in family_transfers]):
+      first_degree = family_transfers[0][2].degree
+      if all([ft[2].degree == first_degree for ft in family_transfers]):
         if verbose>1:
-          print "All are the same degree:", str([ft[1].degree for ft in family_transfers]), "; not interesting"
+          print "All are the same degree:", str([ft[2].degree for ft in family_transfers]), "; not interesting"
       else:
         found_transfers.append( (F, family_transfers) )
   return found_transfers

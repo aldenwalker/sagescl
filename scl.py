@@ -27,7 +27,7 @@ def scl_surface(chain, args=[]):
   return F
 
 
-def scl(chain, mode='local', args=[], return_fraction=True):
+def scl(chain, mode='local', args=[], return_fraction=True, verbose=1):
 
   if chain == '' or chain == ['']:
     return 0
@@ -39,7 +39,8 @@ def scl(chain, mode='local', args=[], return_fraction=True):
   
   cmd_list = ['scallop', '-' + mode] + args + C
     
-  #print "Running " + SCALLOPDIR+str(cmd_list)
+  if verbose > 1:
+    print "Running " + SCALLOPDIR+str(cmd_list)
   if sys.version[:3] == '2.7':
     mout = subprocess.check_output(cmd_list,  \
                              executable=SCALLOPDIR+cmd_list[0],     \
