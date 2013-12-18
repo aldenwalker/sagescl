@@ -942,3 +942,33 @@ def all_cubes(initial_edges=None):
       continue
     good_T.append(t)
   return good_T
+
+
+
+def TPS_with_given_tripods(T1, T2):
+  #0->2, 1->1, 2->0
+  #the middle words are outgoing from T1
+  gens = list(set( (''.join(T1+T2)).lower() ))
+  middle_words = []
+  for i in xrange(3):
+    i1 = i
+    i2 = 2-i
+    if T1[i1][-1].lower() == T2[i2][-1].lower(): 
+      # just insert another generator
+      middle_words.append( (gens[0] if gens[0] != T1[i1][-1].lower() else gens[1]) )
+    else: 
+      #just insert T1[i1][-1] again
+      middle_words.append(T1[i1][-1])
+  ans = []
+  for i in xrange(3):
+    i1 = i
+    i2 = 2-i
+    w = T1[i1] + middle_words[i1] + inverse(T2[i2]) + T2[(i2+1)%3] + inverse(middle_words[(i1-1)%3]) + inverse(T1[(i1-1)%3])
+    ans.append(w)
+  return ans
+
+
+
+
+
+
