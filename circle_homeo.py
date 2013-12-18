@@ -2,7 +2,41 @@ import copy
 import cyclic_order
 import string
 
-from sage.all import flatten
+
+def dedup(L):
+  ans = []
+  for x in L:
+    if ans == [] or abs(ans[-1]-x) > 0.0000001:
+      ans.append(x)
+  return ans
+  
+def merge(L1, L2):
+  ans = []
+  i1 = 0
+  i2 = 0
+  LL1 = len(L1)
+  LL2 = len(L2)
+  while True:
+    if i1 >= LL1:
+      for i in xrange(i2, LL2):
+        if ans == [] or abs(ans[-1]-LL2[i2]) > 0.0000001:
+          ans.append(LL2[i2])
+      break
+    elif i2 >= LL2:
+      for i in xrange(i1, LL1):
+        if ans == [] or abs(ans[-1]-LL1[i1]) > 0.0000001:
+          ans.append(LL1[i1])
+      break
+    else:
+      if LL1[i1] < LL2[i2]:
+        x = LL1[i1]
+        i1 += 1
+      else:
+        x = LL2[i2]
+        i2 += 1
+      if ans == [] or abs(ans[-1]-x) > 0.0000001:
+        ans.append(x)
+  return ans
 
 class RealInterval:
   """a real interval is just (a,b)"""
@@ -55,15 +89,17 @@ class IntervalMap:
       
   def inverse(self):
     return IntervalMap(self.targets, self.sources)
-
-class LinearHomotopyIntervalMap(IntervalMap):
-  def __init__(self, I1, I2, t):
-    self.I1 = I1
-    self.I2 = I2
-    self.t = t
     
-  def __repr__(self):
-    return 'LinearHomotopyIntervalMap('
+  def breakpoints(self):
+    return [I.a for I in self.sources] + [self.sources[-1].b]
+
+def IM_homotopy(m1, m2, t):
+  """returns the IntervalMap which is (1-t)*m1 + t*m2"""
+  all_breaks = merge(m1.breakpoints(), m2.breakpoints())
+  new_sources = [RealInterval(all_breaks[i], all_breaks[i+1]) for i in xrange(len(all_breaks)-1)]
+  new_images = [(1-t)*m1.ap(x) + t*m2.ap(x) for x in all_breaks]
+  new_targets = [RealInterval(new_images[i], new_images[i+1]) for i in xrange(len(all_breaks)-1)]
+  return IntervalMap(sources=new_sources, targets = new_targets)
 
 class EquivariantRHomeo:
   """A real homeo f equivariant under t |-> t+1 is represented 
@@ -131,99 +167,35 @@ class EquivariantRHomeo:
     return self.inverse_ap(x) % 1
   
   def inverse(self):
-    return SignedEquivariantRHomeo(self, -1)
+    all_breaks = [0,1] + [self.ap(x)%1 for x in self.imap.breakpoints()]
+    all_breaks.sort()
+    all_breaks = dedup(all_breaks)
+    nbreaks = len(all_breaks)
+    new_offset = self.inverse_ap(0)
+    new_sources = [RealInterval(all_breaks[i], all_breaks[i+1]) for i in xrange(nbreaks-1)]
+    new_images = [self.inverse_ap(x)-new_offset for x in all_breaks]
+    new_targets = [RealInterval(new_images[i], new_images[i+1]) for i in xrange(nbreaks-1)]
+    return EquivariantRHomeo(offset=new_offset, sources=new_sources, targets=new_targets)
+    
   
   def __mul__(self, other):
-    return ProductEquivariantRHomeo([self, other])
-  
-  
-class SignedEquivariantRHomeo(EquivariantRHomeo):
-  def __init__(self, H, s):
-    self.H = H
-    self.s = s
-  
-  def __repr__(self):
-    return 'SignedEquivariantRHomeo(' + repr(self.H) + ',' + str(self.s) + ')'
-  
-  def __str__(self):
-    return ('+' if self.s>0 else '-') + str(self.H)
-  
-  def ap(self, x):
-    return (self.H.ap(x) if self.s > 0 else self.H.inverse_ap(x))
-  
-  def __call__(self, x):
-    return self.ap(x)
-  
-  def inverse_ap(self, x):
-    return (self.H.inverse_ap(x) if self.s > 0 else self.H.ap(x))
-  
-  def circle_ap(self, x):
-    return (self.H.circle_ap(x) if self.s > 0 else self.H.inverse_circle_ap(x))
-  
-  def inverse_circle_ap(self, x):
-    return (self.H.inverse_circle_ap(x) if self.s > 0 else self.H.circle_ap(x))
-  
-  def inverse(self):
-    return SignedEquivariantRHomeo(self.H, -self.s)
-  
-class ProductEquivariantRHomeo(EquivariantRHomeo):
-  def __init__(self, L):
-    if isinstance(L, list):
-      all_homeos = [(H.L if isinstance(H, ProductEquivariantRHomeo) else H) for H in L]
-      self.L = flatten(all_homeos)
-    else:
-      self.L = [L]
-  
-  def __repr__(self):
-    return 'Product of ' + str(len(self.L)) + ' homeos'
-  
-  def __str__(self):
-    s = 'Product of '+ str(len(self.L)) + ' homeos:\n'
-    for H in self.L:
-      s += repr(H) + '\n'
-    return s
-  
-  def ap(self, x):
-    ans = x
-    for H in reversed(self.L):
-      ans = H(ans)
-    return ans
-  
-  def __call__(self, x):
-    return self.ap(x)
-  
-  def inverse_ap(self, x):
-    ans = x
-    for H in self.L:
-      ans = H.inverse_ap(ans)
-    return ans
-  
-  def circle_ap(self, x):
-    ans = x
-    for H in reversed(self.L):
-      ans = H.circle_ap(ans)
-    return ans
-  
-  def inverse_circle_ap(self, x):
-    ans = x
-    for H in self.L:
-      ans = H.inverse_circle_ap(ans)
-    return ans
+    """returns self*other; note (self*other)(x) = self(other(x))"""
+    pullback_breakpoints = [other.inverse_ap(x)%1 for x in self.imap.breakpoints()]
+    pullback_breakpoints.sort()
+    all_breakpoints = merge(other.imap.breakpoints(), pullback_breakpoints)
+    npoints = len(all_breakpoints)
+    new_offset = self.ap(other.ap(0))
+    new_images = [self.ap(other.ap(x))-new_offset for x in all_breakpoints]
+    new_sources = [RealInterval(all_breakpoints[i], all_breakpoints[i+1]) for i in xrange(npoints-1)]
+    new_targets = [RealInterval(new_images[i], new_images[i+1]) for i in xrange(npoints-1)]
+    return EquivariantRHomeo(offset=new_offset, sources=new_sources, targets=new_targets)
+    
 
-class LinearHomotopyEquivariantRHomeo(EquivariantRHomeo):
-  def __init__(self, H0, H1, t):
-    self.H0 = H0
-    self.H1 = H1
-    self.t = t
-  
-  def __repr__(self):
-    return 'LinearHomotopyEquivariantRHomeo(' + repr(self.H0) + ',' + repr(self.H1) + ',' + str(self.t) + ')'
-  
-  def ap(self, x):
-    return (1-t)*self.H0.ap(x) + t*self.H1.ap(x)
-  
-  def __call__(self, x):
-    return self.ap(x)
+def ERH_homotopy(h1, h2, t):
+  """returns the map which is (1-t)*h1 + t*h2"""
+  new_imap = IM_homotopy(h1.imap, h2.imap, t)
+  new_offset = (1-t)*h1.offset + t*h2.offset
+  return EquivariantRHomeo(offset=new_offset, imap=new_imap)
 
 
 def PSL2R_action(CO):
