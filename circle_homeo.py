@@ -1,6 +1,7 @@
 import copy
 import cyclic_order
 import string
+import math
 
 
 def dedup(L):
@@ -52,7 +53,9 @@ class RealInterval:
     return '[' + str(self.a) + ',' + str(self.b) + ']'
   
   def __contains__(self, x):
-    return (self.a <= x) and (x <= self.b)
+    eqa = (abs(self.a-x) < 0.0000001)
+    eqb = (abs(self.b-x) < 0.0000001)
+    return (eqa or self.a <= x) and (eqb or x <= self.b)
   
   def get_fraction(self, x):
     return (x-self.a)/self.size
@@ -192,7 +195,12 @@ class EquivariantRHomeo:
     new_sources = [RealInterval(all_breakpoints[i], all_breakpoints[i+1]) for i in xrange(npoints-1)]
     new_targets = [RealInterval(new_images[i], new_images[i+1]) for i in xrange(npoints-1)]
     return EquivariantRHomeo(offset=new_offset, sources=new_sources, targets=new_targets)
-    
+  
+  def rot(self, n=100):
+    x = 0
+    for i in xrange(n):
+      x = self.ap(x)
+    return x/100.0
 
 def ERH_homotopy(h1, h2, t):
   """returns the map which is (1-t)*h1 + t*h2"""
@@ -202,8 +210,59 @@ def ERH_homotopy(h1, h2, t):
 
 def L2_distance(h1, h2):
   all_breaks = merge(h1.imap.breakpoints(), h2.imap.breakpoints())
+  s = 0
   for i in xrange(len(all_breaks)-1):
-    pass
+    x1 = all_breaks[i]
+    x2 = all_breaks[i+1]
+    y11 = h1.ap(x1)
+    y12 = h2.ap(x1)
+    y21 = h1.ap(x2)
+    y22 = h2.ap(x2)
+    a = (y21-y11)/(x2-x1)
+    b = y11 - x1*a
+    c = (y22-y12)/(x2-x1)
+    d = y12 - x1*c
+    if abs(a-c) < 0.0000001:
+      s += (b-d)*(b-d)*(x2-x1)
+      continue
+    I1 = ((a-c)*x1 + (b-d))**3/(3*(a-c))
+    I2 = ((a-c)*x2 + (b-d))**3/(3*(a-c))
+    s += I2-I1
+  return math.sqrt(s)
+
+
+def homotope_and_compare(H, gen_words, target_word,n):
+  """homotope gens between the identity and the words in gen_word, 
+  then compute target_word in *those* generators, and compare it to 
+  H[0]"""
+  ALC = string.ascii_lowercase
+  gen_words_L = [[(ALC.index(x)+1 if x.islower() else -(ALC.index(x.lower())+1)) for x in w] for w in gen_words]
+  target_word_L = [(ALC.index(x)+1 if x.islower() else -(ALC.index(x.lower())+1)) for x in target_word]
+  step = 1.0/n
+  h = [[EquivariantRHomeo(nints=8) for __ in xrange(2)] for _ in xrange(2)]
+  for j in xrange(2):
+    for i in xrange(len(gen_words_L[j])):
+      if gen_words_L[j][i] > 0:
+        h[j][1] = h[j][1]*H[gen_words_L[j][i]-1]
+      else:
+        h[j][1] = h[j][1]*H[-gen_words_L[j][i]-1].inverse()
+  
+  current_h = [0,0]
+  plot_data = []
+  plot_data_rot = []
+  for i in xrange(n+1):
+    current_h[0] = ERH_homotopy(h[0][0], h[0][1], i*step)
+    for j in xrange(n+1):
+      current_h[1] = ERH_homotopy(h[1][0], h[1][1], j*step)
+      current_prod = EquivariantRHomeo(nints=8)
+      for k in xrange(len(target_word)):
+        if target_word_L[k] > 0:
+          current_prod = current_prod*current_h[target_word_L[k]-1]
+        else:
+          current_prod = current_prod*current_h[-target_word_L[k]-1].inverse()
+      plot_data.append( (i*step, j*step, L2_distance(current_prod, H[0])) )
+      plot_data_rot.append( (i*step, j*step, current_prod.rot()) )
+  return (plot_data, plot_data_rot)
 
 
 def PSL2R_action(CO):
