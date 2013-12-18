@@ -19,20 +19,20 @@ def merge(L1, L2):
   while True:
     if i1 >= LL1:
       for i in xrange(i2, LL2):
-        if ans == [] or abs(ans[-1]-LL2[i2]) > 0.0000001:
-          ans.append(LL2[i2])
+        if ans == [] or abs(ans[-1]-L2[i]) > 0.0000001:
+          ans.append(L2[i])
       break
     elif i2 >= LL2:
       for i in xrange(i1, LL1):
-        if ans == [] or abs(ans[-1]-LL1[i1]) > 0.0000001:
-          ans.append(LL1[i1])
+        if ans == [] or abs(ans[-1]-L1[i]) > 0.0000001:
+          ans.append(L1[i])
       break
     else:
-      if LL1[i1] < LL2[i2]:
-        x = LL1[i1]
+      if L1[i1] < L2[i2]:
+        x = L1[i1]
         i1 += 1
       else:
-        x = LL2[i2]
+        x = L2[i2]
         i2 += 1
       if ans == [] or abs(ans[-1]-x) > 0.0000001:
         ans.append(x)
@@ -182,10 +182,13 @@ class EquivariantRHomeo:
     """returns self*other; note (self*other)(x) = self(other(x))"""
     pullback_breakpoints = [other.inverse_ap(x)%1 for x in self.imap.breakpoints()]
     pullback_breakpoints.sort()
+    #print "Merging breakpoints ", other.imap.breakpoints(), pullback_breakpoints
     all_breakpoints = merge(other.imap.breakpoints(), pullback_breakpoints)
     npoints = len(all_breakpoints)
     new_offset = self.ap(other.ap(0))
     new_images = [self.ap(other.ap(x))-new_offset for x in all_breakpoints]
+    #print "new breakpoints: ", all_breakpoints
+    #print "new images: ", new_images
     new_sources = [RealInterval(all_breakpoints[i], all_breakpoints[i+1]) for i in xrange(npoints-1)]
     new_targets = [RealInterval(new_images[i], new_images[i+1]) for i in xrange(npoints-1)]
     return EquivariantRHomeo(offset=new_offset, sources=new_sources, targets=new_targets)
@@ -196,6 +199,11 @@ def ERH_homotopy(h1, h2, t):
   new_imap = IM_homotopy(h1.imap, h2.imap, t)
   new_offset = (1-t)*h1.offset + t*h2.offset
   return EquivariantRHomeo(offset=new_offset, imap=new_imap)
+
+def L2_distance(h1, h2):
+  all_breaks = merge(h1.imap.breakpoints(), h2.imap.breakpoints())
+  for i in xrange(len(all_breaks)-1):
+    pass
 
 
 def PSL2R_action(CO):
