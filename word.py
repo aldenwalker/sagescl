@@ -967,7 +967,14 @@ def TPS_with_given_tripods(T1, T2):
     ans.append(w)
   return ans
 
-
+def tripods_are_negative(T1, T2):
+  try:
+    i = T2.index(T1[0])
+  except ValueError:
+    return False
+  if T2[(i+1)%3] == T1[2] and T2[(i+2)%3] == T1[1]:
+    return True
+  return False
 
 
 
