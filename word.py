@@ -976,6 +976,15 @@ def tripods_are_negative(T1, T2):
     return True
   return False
 
+def tripods_are_equal(T1, T2):
+  try:
+    i = T2.index(T1[0])
+  except ValueError:
+    return False
+  if T2[(i+1)%3] == T1[1] and T2[(i+2)%3] == T1[2]:
+    return True
+  return False
+
 
 
 
