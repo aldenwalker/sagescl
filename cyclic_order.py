@@ -272,9 +272,9 @@ def extend_suborders_to_order(rank, T):
       #print "Adding ", g, " to wherever it fits"
       for j in xrange(len(current_order)):
         good_spot = True
-        for k in xrange(len(current_order)):
+        for k in xrange(1,len(current_order)):
           for ell in xrange(k+1, len(current_order)):
-            if -1 == multiple_cyclic_order_eval([g, current_order[j+k+1], current_order[j+ell+1]], T):
+            if -1 == multiple_cyclic_order_eval([g, current_order[j+k], current_order[j+ell]], T):
               good_spot = False
               break
           if not good_spot:
