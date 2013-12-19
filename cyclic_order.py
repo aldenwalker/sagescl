@@ -240,7 +240,7 @@ def extend_suborders_to_order(rank, T):
   gens = word.alphabet[:rank]
   gens += [x.swapcase() for x in gens]
   #take one of the orders to extend
-  current_order = T[0]
+  current_order = CyclicOrder(str(T[0]))
   undone_gens = [g for g in gens if g not in current_order]
   while True:
     #print "Current order: ", current_order
