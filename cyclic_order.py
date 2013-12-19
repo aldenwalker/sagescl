@@ -285,7 +285,7 @@ def extend_suborders_to_order(rank, T):
           break
       if not good_spot:
         #print "We didn't find a spot when we should have"
-        return None
+        1/0
   #the order should be done
   #print "Check current order is compatible: ", str(all([current_order.is_compatible(t) for t in T]))
   return current_order
