@@ -254,7 +254,13 @@ def extend_suborders_to_order(rank, T):
       for j in xrange(len(current_order)):
         g1 = current_order[j]
         g2 = current_order[j+1]
-        if 1 == multiple_cyclic_order_eval([g1, g, g2], T):
+        if 1 == multiple_cyclic_order_eval([g1, g, g2], [current_order] + T):
+          #verify that this spot is ok
+          for k in xrange(len(current_order)):
+            for ell in xrange(k+1, len(current_order)):
+               if -1 == multiple_cyclic_order_eval([g, current_order[j+k+1], current_order[j+ell+1]], [current_order] + T):
+                #contradiction
+                return None
           #print "Adding ", g, " after ", g1
           current_order.insert(g1, g)
           #print "After inserting: ", str(current_order)
@@ -274,24 +280,31 @@ def extend_suborders_to_order(rank, T):
         good_spot = True
         for k in xrange(len(current_order)):
           for ell in xrange(k+1, len(current_order)):
-            if -1 == multiple_cyclic_order_eval([g, current_order[j+k+1], current_order[j+ell+1]], T):
+            if -1 == multiple_cyclic_order_eval([g, current_order[j+k+1], current_order[j+ell+1]], [current_order] + T):
               good_spot = False
               break
           if not good_spot:
             break
         if good_spot:
           #print "Adding ", g, " in spot ", j
-          current_order.insert(j, g)
-          break
+          #for k in xrange(len(current_order)):
+          #  for ell in xrange(k+1, len(current_order)):
+          #    print [g, current_order[j+k+1], current_order[j+ell+1]], 
+          #    print multiple_cyclic_order_eval([g, current_order[j+k+1], current_order[j+ell+1]], T)
+          g_inserted_order = CyclicOrder(current_order)
+          g_inserted_order.insert(j,g)
+          completed_order = extend_suborders_to_order(rank, [g_inserted_order] + T)
+          if completed_order != None:
+            return completed_order
       if not good_spot:
-        print "We didn't find a spot when we should have"
-        for j in xrange(len(current_order)):
-          print j, ": "
-          for k in xrange(len(current_order)):
-            for ell in xrange(k+1, len(current_order)):
-              print [g, current_order[j+k+1], current_order[j+ell+1]], 
-              print multiple_cyclic_order_eval([g, current_order[j+k+1], current_order[j+ell+1]], T)
-        1/0
+        #print "We didn't find a spot when we should have"
+        #for j in xrange(len(current_order)):
+        #  print j, ": "
+        #  for k in xrange(len(current_order)):
+        #    for ell in xrange(k+1, len(current_order)):
+        #      print [g, current_order[j+k+1], current_order[j+ell+1]], 
+        #      print multiple_cyclic_order_eval([g, current_order[j+k+1], current_order[j+ell+1]], T)
+        return None
   #the order should be done
   #print "Check current order is compatible: ", str(all([current_order.is_compatible(t) for t in T]))
   return current_order

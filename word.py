@@ -62,6 +62,27 @@ def multiply_words_marked(w1, w2=None) :
   elif type(w1) == list:
     return clean_markings('.' + reduce(multiply_words_marked, w1))
 
+def cyclic_alignment(w1, i, w2, j):
+  L = 0
+  LW1 = len(w1)
+  LW2 = len(w2)
+  M = max(LW1, LW2)
+  while L<M and w1[(i+L)%LW1] == w2[(j+L)%LW2].swapcase():
+    L += 1
+  return L
+
+def rectangle_alignment(w1, i, w2, j):
+  """returns the length of the alignment between w1 and w2
+  when going *forward* along w1 and *backward* along w2 from positions 
+  i and j, respectively, alignment here meaning the letters are inverse"""
+  L = 0
+  LW1 = len(w1)
+  LW2 = len(w2)
+  M = max(LW1, LW2)
+  while L<M and w1[(i+L)%LW1] == w2[(j-L)%LW2].swapcase():
+    L += 1
+  return L
+
 def clean_markings(w):
   i=0
   while i < len(w) and w[-1] == '.':
@@ -986,5 +1007,175 @@ def tripods_are_equal(T1, T2):
   return False
 
 
+def find_all_rectangles(L_in):
+  if type(L_in) == str:
+    L = [L_in]
+  else:
+    L = L_in
+  rectangles = []
+  num_words = len(L)
+  for i in xrange(num_words):
+    LW1 = len(L[i])
+    for j in xrange(num_words):
+      LW2 = len(L[j])
+      for posi in xrange(LW1):
+        for posj in xrange(LW2):
+          ca = rectangle_alignment(L[i], posi, L[j], posj-1)
+          if ca > 0:
+            rectangles.append( ((i,posi), (j, posj), ca) )
+  return rectangles
+  
+
+def find_maximal_rectangles(L_in):
+  if type(L_in)==str:
+    L = [L_in]
+  else:
+    L = L_in
+  num_words = len(L)
+  rectangles = set()
+  for i in xrange(num_words):
+    Li = len(L[i])
+    for j in xrange(i, num_words):
+      Lj = len(L[j])
+      for posi in xrange(Li):
+        for posj in xrange(Lj):
+          #print "Trying positions ", posi, " and ", posj
+          forward_alignment = rectangle_alignment(L[i], posi, L[j], posj-1)
+          backward_alignment = rectangle_alignment(L[j], posj, L[i], posi-1)
+          #print "Got forward and backward alignments of ", forward_alignment, " and ", backward_alignment
+          starti = (posi-backward_alignment)%Li
+          startj = (posj+backward_alignment)%Lj
+          #print "Adding: ", ( (i, starti), (j,startj), forward_alignment + backward_alignment )
+          rectangles.add( ( (i, starti), (j,startj), forward_alignment + backward_alignment ) )
+  return rectangles
 
 
+def find_maximal_tripod(L_in, verbose=0):
+  if type(L_in)==str:
+    L = [L_in]
+  else:
+    L = L_in
+  num_words = len(L)
+  #for all triples of positions, find the rectangle alignments
+  positions = [(i,j) for i in xrange(num_words) for j in xrange(len(L[i]))]
+  num_pos = len(positions)
+  triples = Tuples(positions, 3)
+  max_len = 0
+  best_tripod = None
+  for [(i0,j0),(i1,j1),(i2,j2)] in triples:
+    ra0 = rectangle_alignment(L[i0], j0, L[i1], j1-1)
+    ra1 = rectangle_alignment(L[i1], j1, L[i2], j2-1)
+    ra2 = rectangle_alignment(L[i2], j2, L[i0], j0-1)
+    total_length = ra0 + ra1 + ra2
+    if total_length > max_len:
+      max_len = total_length
+      best_tripod = [(i0,j0),(i1,j1),(i2,j2), (ra0, ra1, ra2)]
+      if verbose>0:
+        print "New max length of ", total_length, " with ", [(i0,j0),(i1,j1),(i2,j2)]
+  return (max_len, best_tripod)
+
+def find_maximal_quadpod(L_in, verbose=0):
+  if type(L_in)==str:
+    L = [L_in]
+  else:
+    L = L_in
+  #find all rectangles
+  R = find_all_rectangles(L)
+  R_dict = dict([ ((I1, I2), ell) for (I1, I2, ell) in R])
+  MR = find_maximal_rectangles(L)
+  num_words = len(L)
+  positions = [(i,j) for i in xrange(num_words) for j in xrange(len(L[i]))]
+  max_length = 0
+  best_quadpod = None
+  for ( inside0_left, inside1_left, middle_length) in MR:
+    inside0_right = (inside0_left[0], (inside0_left[1]+middle_length)%len(L[inside0_left[0]]) )
+    inside1_right = (inside1_left[0], (inside1_left[1]-middle_length)%len(L[inside1_left[0]]) )
+    #choose the outside positions for the left and right junctions
+    for outside_left in positions:
+      ra0_left = R_dict.get( (inside1_left, outside_left), 0 )
+      ra1_left = R_dict.get( (outside_left, inside0_left), 0 )
+      for outside_right in positions:
+        ra0_right = R_dict.get( (inside0_right, outside_right), 0 )
+        ra1_right = R_dict.get( (outside_right, inside1_right), 0 )
+        total_length = middle_length + (0.5*(ra0_left + ra1_left + ra0_right + ra1_right))
+        if total_length > max_length:
+          max_length = total_length
+          best_quadpod = (total_length, (inside0_left, inside1_left, outside_left, inside0_right, outside_right, inside1_right))
+  return best_quadpod
+        
+
+
+def find_maximal_quadpod_old(L_in, verbose=0):
+  if type(L_in)==str:
+    L = [L_in]
+  else:
+    L = L_in
+  num_words = len(L)
+  #for all triples of positions, find the rectangle alignments
+  positions = [(i,j) for i in xrange(num_words) for j in xrange(len(L[i]))]
+  num_pos = len(positions)
+  quadruples = Tuples(positions, 4)
+  max_len = 0
+  best_quadpod = None
+  for [(i0,j0),(i1,j1),(i2,j2),(other_i1, other_j1)] in quadruples:
+    #if L[i0][j0] == L[i2][j2-1].swapcase() or \
+    #   L[i1][j1] == L[i0][j0-1].swapcase() or \
+    #   L[i2][j2] == L[i1][j1-1].swapcase():
+    if L[i1][j1] == L[i0][j0-1].swapcase():
+      continue #it's not reduced
+    ra0 = rectangle_alignment(L[i0], j0, L[i1], j1-1)
+    ra1 = rectangle_alignment(L[i1], j1, L[i2], j2-1)
+    ra2 = rectangle_alignment(L[i2], j2, L[i0], j0-1)
+    #go to the other end of rectangle 0
+    other_i0, other_j0, other_i2, other_j2 = i0, (j0+ra0)%len(L[i0]), i1, (j1-ra0)%len(L[i1])
+    #if L[i0][j0] == L[i2][j2-1].swapcase() or \
+    #   L[i1][j1] == L[i0][j0-1].swapcase() or \
+    #   L[i2][j2] == L[i1][j1-1].swapcase():
+    if L[other_i0][other_j0] == L[other_i2][other_j2-1].swapcase():
+      continue #it's not reduced
+    other_ra0 = rectangle_alignment(L[other_i0], other_j0, L[other_i1], other_j1-1)
+    other_ra1 = rectangle_alignment(L[other_i1], other_j1, L[other_i2], other_j2-1)
+    #this should be the same as rectangle 0
+    if verbose>0:
+      other_ra2 = rectangle_alignment(L[other_i2], other_j2, L[other_i0], other_j0-1)
+      if other_ra2 != ra0:
+        print "Rectangles don't agree?"
+        print (i0,j0),(i1,j1),(i2,j2),(other_i0, other_j0), (other_i1, other_j1), (other_i2, other_j2)
+    inside_length = ra0
+    outside_length = ra1 + ra2 + other_ra0 + other_ra1   
+    total_length = inside_length + 0.5*outside_length
+    if total_length > max_len:
+      max_len = total_length
+      best_quadpod = [(i0,j0),(i1,j1),(i2,j2), (other_i0, other_j0), (other_i1, other_j1), (other_i2, other_j2), (inside_length, outside_length, total_length), (ra1, ra2, ra0, other_ra0, other_ra1)]
+      if verbose>0:
+        print "New max length of ", total_length, " with ", [(i0,j0),(i1,j1),(i2,j2)]
+  return (max_len, best_quadpod)
+
+def find_best_vertex_pair(L_in, verbose=0):
+  if type(L_in)==str:
+    L = [L_in]
+  else:
+    L = L_in
+  #find all rectangles
+  R = find_all_rectangles(L)
+  R_dict = dict([ ((I1, I2), ell) for (I1, I2, ell) in R])
+  MR = find_maximal_rectangles(L)
+  num_words = len(L)
+  positions = [(i,j) for i in xrange(num_words) for j in xrange(len(L[i]))]
+  max_length = 0
+  best_quadpod = None
+  for ( inside0_left, inside1_left, middle_length) in MR:
+    inside0_right = (inside0_left[0], (inside0_left[1]+middle_length)%len(L[inside0_left[0]]) )
+    inside1_right = (inside1_left[0], (inside1_left[1]-middle_length)%len(L[inside1_left[0]]) )
+    #choose the outside positions for the left and right junctions
+    for outside_left in positions:
+      ra0_left = R_dict.get( (inside1_left, outside_left), 0 )
+      ra1_left = R_dict.get( (outside_left, inside0_left), 0 )
+      for outside_right in positions:
+        ra0_right = R_dict.get( (inside0_right, outside_right), 0 )
+        ra1_right = R_dict.get( (outside_right, inside1_right), 0 )
+        total_length = middle_length + (0.5*(ra0_left + ra1_left + ra0_right + ra1_right))
+        if total_length > max_length:
+          max_length = total_length
+          best_quadpod = (total_length, (inside0_left, inside1_left, outside_left, inside0_right, outside_right, inside1_right))
+  return best_quadpod
