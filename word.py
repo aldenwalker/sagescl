@@ -1,5 +1,7 @@
 import random as RAND
 
+import itertools
+
 from sage.all import *
 
 alphabet = list('abcdefghijklmnopqrstuvwxyz')
@@ -9,6 +11,13 @@ L = ['a','b','c','A','B','C']
 nextLetterChoices3 = dict( [ ( x, [y for y in L if x != y.swapcase()]) for x in L] )
 L4 = ['a','b','c','d','A','B','C','D']
 nextLetterChoices4 = dict( [ ( x, [y for y in L4 if x != y.swapcase()]) for x in L4] )
+
+def next_letter_dict(rank):
+  our_alphabet = alphabet[:rank] + [ell.swapcase() for ell in alphabet[:rank]]
+  next_letters = dict([ (a,[b for b in our_alphabet if b!=a.swapcase()]) for a in our_alphabet])
+  next_letters[''] = our_alphabet
+  return next_letters
+
 
 def non_reduced_index( w ):
   """return the first index i for which i, i+1 is nonreduced"""
@@ -1179,3 +1188,62 @@ def find_best_vertex_pair(L_in, verbose=0):
           max_length = total_length
           best_quadpod = (total_length, (inside0_left, inside1_left, outside_left, inside0_right, outside_right, inside1_right))
   return best_quadpod
+
+
+def subwords(w_in, ell):
+  if type(w_in) == list:
+    return list(itertools.chain(*[subwords(w,ell) for w in w_in]))
+  return [cyclic_subword(w_in, i, ell) for i in xrange(len(w_in))]
+
+
+
+
+
+def minimal_unique_word_length(C, w_ind, ind):
+  """find the minimal length L such that the word C[w_ind] starting 
+  at ind has the property that its inverse doesn't appear in C"""
+  L = 1
+  Lw = len(C[w_ind])
+  current_ind = ind
+  inverse_positions = [(i,j) for (i,j) in [(i,j) for i in xrange(len(C)) for j in xrange(len(C[i]))] if C[i][j] == C[w_ind][ind].swapcase()]
+  while len(inverse_positions) > 0:
+    #print inverse_positions
+    current_ind = (current_ind+1)%Lw
+    inverse_positions = [(i,(j-1)%len(C[i])) for (i,j) in inverse_positions]
+    inverse_positions = [(i,j) for (i,j) in inverse_positions if C[i][j] == C[w_ind][current_ind].swapcase()]
+    L += 1
+  return L
+
+def distinct_words(C_in, try_all_starts=False):
+  """try to find the maximum number of words in C such that their inverse don't appear.
+  It returns the number of them found.  If this number is x, note that it gives 
+  a lower bound scl(C) >= x/12"""
+  if type(C_in) == str:
+    C = [C_in]
+  else:
+    C = C_in
+  nw = len(C)
+  found_subwords = []
+  for i in xrange(nw):
+    Lw = len(C[i])
+    start_indices = ([0] if not try_all_starts else range(Lw))
+    max_found_subwords = []
+    for j in start_indices:
+      current_start_index = j
+      distance_to_start_index = Lw
+      found_subwords_this_start_index = []
+      while True:
+        mwl = minimal_unique_word_length(C, i, current_start_index)
+        distance_to_start_index -= mwl
+        current_start_index = (current_start_index + mwl)%Lw
+        if distance_to_start_index < 0:
+          break
+        else:
+          found_subwords_this_start_index.append( (i,current_start_index, mwl) )
+          if distance_to_start_index == 0:
+            break
+      if len(found_subwords_this_start_index) > len(max_found_subwords):
+        max_found_subwords = found_subwords_this_start_index
+    found_subwords += max_found_subwords
+    
+  return found_subwords

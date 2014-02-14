@@ -5,6 +5,8 @@ import word
 import morph
 import ends
 
+from sage.all import Tuples, Permutations
+
 alphabet = list('abcdefghijklmnopqrstuvwxyz')
 
 def perm_inverse(p):
@@ -247,6 +249,19 @@ def cyclic_cover(base_gens, degree):
   return G
     
 
+def all_covers(rank, deg, gens=None, verbose=1):
+    P = Permutations(range(deg)).list()
+    T = Tuples(P, rank)
+    cover_rank = 1+deg*rank-deg
+    if gens == None:
+      base_gens = word.alphabet[:rank]
+    else:
+      base_gens = gens
+    for t in T:
+      G = FISubgroup(base_gens, t)
+      if not G.connected:
+        continue
+      yield G
 
 
 
