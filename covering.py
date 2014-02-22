@@ -4,6 +4,7 @@ import copy
 import word
 import morph
 import ends
+import heapq
 
 from sage.all import Tuples, Permutations
 
@@ -266,9 +267,183 @@ def all_covers(rank, deg, gens=None, verbose=1):
 
 
 
+def cyclic_sort(L):
+  """rotates the list so a minimal element is first"""
+  min_i = min(range(len(L)), key=L.__getitem__)
+  return L[min_i:] + L[:min_i]
+  
+
+
+def find_compatible_marked_edges(tripod_list, rank, ball_size):
+  next_letters = word.next_letter_dict(rank)
+  marked_edges = set()
+  unmarked_edges = set()
+  tripod_marked_edges = []
+  #the edges in neither are unmarked and undetermined
+  positions_done = set()
+  made_choice = False
+  positions_stack = [(0,'')]
+  heapq.heapify(positions_stack) #probably unnecessary
+
+  contradiction = None
+  while True:
+    #pop off the shortest undone word
+    L, current_position = heapq.heappop(positions_stack)
+    if L > ball_size:
+      break
+    
+    print "Current position is: ", current_position
+    
+    #build the list of putative edges
+    #it's 'relative to current_position':
+    #('relative to id','relative to id, maybe with reverse at end',
+    #  True=fixed (cannot move),[(tripod,pos_in_tripod),...])
+    #and then each tripod gets a list of edges
+    putative_edges = {}
+    edges_for_tripods = [[None, None, None] for t in tripod_list]
+    for ti,t in enumerate(tripod_list):
+      for ei,e in enumerate(t):
+        if e[0] in putative_edges:
+          putative_edges[e[0]][-1].append( (ti,ei,0) )
+          edges_for_tripods[ti][ei] = e[0]
+        else:
+          relid = current_position + e[0] #if it cancels, note this won't cancel
+          relid_no_cancel = word.trim_trailing_cancel(relid)
+          fixed = (relid_no_cancel in marked_edges)
+          putative_edges[e[0]] = (relid_no_cancel, relid, fixed, [ (ti, ei, 0) ] )
+          edges_for_tripods[ti][ei] = e[0]
+
+    #now all initial edges are set up
+    #find an edge to push out, either because it's forced 
+    #to be unmarked, or because it participates in a contradiction
+    contradiction = None
+    while True:
+      print "The list of putative edges is:"
+      print putative_edges
+      
+      edge_to_push = None
+      for e in putative_edges:
+        #check if it's actually an unmarked edge
+        if putative_edges[e][0] in unmarked_edges:
+          print "Found the unmarked edge to push ", e
+          edge_to_push = e
+          break
+      if edge_to_push==None:
+        #we need to try to find a contradiction
+        sorted_tripod_edges = [(tuple(cyclic_sort(eft)), i) for i,eft in enumerate(edges_for_tripods)]
+        sorted_tripod_edges.sort()
+        #now any reversed tripods should show up next to one another
+        print "Trying to find a contradiction with the sorted tripod edge list:"
+        print sorted_tripod_edges
+        contradiction = None
+        for i in xrange(len(sorted_tripod_edges)-1):
+          if word.tripods_are_negative(sorted_tripod_edges[i][0], sorted_tripod_edges[i+1][0]):
+            contradiction = ( sorted_tripod_edges[i][0], sorted_tripod_edges[i+1][0] )
+            print "Found the contradiction ", contradiction
+            break
+        if contradiction != None:
+          #get the edge to push out of the contradiction
+          potential_pushouts = contradiction[0]
+          print "Initial potential pushouts: ", potential_pushouts
+          potential_pushouts = [e for e in potential_pushouts if putative_edges[e][0] not in marked_edges]
+          print "Edge we are allowed to push", potential_pushouts
+          lpp = len(potential_pushouts)
+          if lpp == 1:
+            edge_to_push = potential_pushouts[0]
+          elif lpp > 0:
+            #choose the one heading towards the id, if it exists
+            made_choice = True
+            for e in potential_pushouts:
+              if len(putative_edges[e][0]) != len(putative_edges[e][1]):
+                print "Chose the edge going towards id"
+                edge_to_push = e
+                break
+            if edge_to_push == None:
+              #if we're here, we can pick one, but there's no obvious choice
+              #just pick the first one
+              print "No obvious choice -- just pick the first"
+              edge_to_push = potential_pushouts[0]
+          
+      if edge_to_push == None:
+        #we cannot push any more; maybe there is a contradiction, but oh well
+        print "Cannot push more"
+        break
+      else:
+        #push out the edge until it splits, then re-evaluate
+        e = edge_to_push
+        #if we're pushing along it, it has to be unmarked
+        unmarked_edges.add(putative_edges[e][0])
+        #get the tripods involved
+        tripods_involved = putative_edges[e][-1]
+        print "Pushing out along the tripods ", tripods_involved
+        pushed_edges = {}
+        for ti, ei, elli in tripods_involved:
+          #this is tripod_ind, end_ind, letter_ind
+          #get the next letter
+          new_e = e + tripod_list[ti][ei][elli+1]
+          if new_e in pushed_edges:
+            pushed_edges[new_e][-1].append( (ti, ei, elli+1) )
+            edges_for_tripods[ti][ei] = new_e
+          else:
+            relid = word.edge_relative_to_id(current_position, new_e)
+            relid_no_cancel = word.trim_trailing_cancel(relid)
+            fixed = (relid_no_cancel in marked_edges)
+            pushed_edges[new_e] = (relid_no_cancel, relid, fixed, [ (ti, ei, elli+1) ])
+            edges_for_tripods[ti][ei] = new_e
+        print "The new pushed edges: ",
+        print pushed_edges
+        for pe in pushed_edges:
+          if pe in putative_edges:
+            print "Pushed edge already putative"
+            return
+          putative_edges[pe] = pushed_edges[pe]
+        del putative_edges[e]
+    
+    if contradiction != None:
+      #there is a contradiction we cannot resolve
+      print "Cannot resolve contradiction"
+      return
+    
+    #lock in the edges
+    print "Locking in putative edges"
+    if made_choice:
+      print "We did make a choice"
+    else:
+      print "We did not make a choice"
+    print putative_edges
+    for e in putative_edges:
+      relid_no_cancel = putative_edges[e][0]
+      if relid_no_cancel not in marked_edges:
+        marked_edges.add(relid_no_cancel)
+    #record the edges for each tripod
+    for es in edges_for_tripods:
+      tripod_marked_edges.append( [putative_edges[e][1] for e in es] )
+    #modify the stack
+    positions_done.add(current_position)
+    lcp = len(current_position)
+    for ell in next_letters[current_position[-1:]]:
+      heapq.heappush(positions_stack, (lcp+1, current_position + ell))
+    
+  return marked_edges, unmarked_edges, tripod_marked_edges
 
 
 
+
+def find_path_avoiding_marked_edges(desired_len, rank, marked_edges, unmarked_edges):
+  """find a path which avoids the marked edges *and* edges that aren't 
+  listed"""
+  word_stack = ['']
+  next_letters = word.next_letter_dict(rank)
+  while len(word_stack) > 0:
+    current_word = word_stack.pop()
+    for ell in next_letters[current_word[-1:]]:
+      nw = current_word + ell
+      if nw in unmarked_edges:
+        if len(nw) >= desired_len:
+          return nw
+        word_stack.append(nw)
+  return None
+  
 
 
 

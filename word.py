@@ -18,6 +18,28 @@ def next_letter_dict(rank):
   next_letters[''] = our_alphabet
   return next_letters
 
+def edge_relative_to_id(pos, path):
+  """gives the edge obtained by going to pos and then following path.
+  If the last thing is to backtrack, it doesn't cancel that"""
+  lp = len(path)
+  current_word = pos
+  for i,ell in enumerate(path):
+    if len(current_word) == 0 or current_word[-1] != ell.swapcase():
+      current_word += ell
+    else:
+      if i == lp-1:
+        current_word += ell
+      else:
+        current_word = current_word[:-1]
+  return current_word
+
+
+def trim_trailing_cancel(w):
+  if len(w)<2 or w[-1] != w[-2].swapcase():
+    return w
+  else:
+    return w[:-1]
+
 
 def non_reduced_index( w ):
   """return the first index i for which i, i+1 is nonreduced"""
