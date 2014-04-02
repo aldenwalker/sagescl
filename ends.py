@@ -220,7 +220,11 @@ def compatible_cyclic_orders(EL, rank=None, all_orders=False):
   
   
   
-  
+def plot_free_group(rank, paths=None, edges=None, ends=None, ends_with_basepoints=None):
+  G = SAGE.Graphics()
+  G += SAGE.circle((0,0),1)
+  G.show()
+  return
   
   
   

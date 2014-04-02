@@ -54,10 +54,19 @@ def non_reduced_index( w ):
   return None
 
 def letter_index_dict(w):
-  """return a dictionary whose keys are letters and whose values are lists of indices"""
+  """Return a dictionary whose keys are letters and whose values are lists of indices.
+  If w is a list of words, then the values are lists of pairs (word_index, letter_index)."""
+  if type(w) == list:
+    sub_dicts = [letter_index_dict(W) for W in w]
+    all_keys = list(set(itertools.chain(*[d.keys() for d in sub_dicts])))
+    big_dict = {}
+    for k in all_keys:
+      for i, d in enumerate(sub_dicts):
+        big_dict.setdefault(k, []).extend([(i,j) for j in d.get(k,[])])
+    return big_dict
   ans = {}
   for i, let in enumerate(w):
-    ans[let] = ans.get(let, []) + [i]
+    ans.setdefault(let, []).append(i)
   return ans
 
 
@@ -153,6 +162,7 @@ def cyc_red(w, marked=False):
     return w[i:LW-i]
 
 def cyc_red_get_conjugate(w):
+  """Cyclically reduce, plus return the conjugating word"""
   if len(w) == 0 or len(w) == 1:
     return (w, '')
   i=0
@@ -202,6 +212,7 @@ def cyclic_subword(w, i, L):
   Lw = len(w)
   L_left = L
   ans = ''
+  i = i%Lw
   while L_left > Lw:
     ans += w[i:] + w[:i]
     L_left -= Lw
@@ -1269,3 +1280,103 @@ def distinct_words(C_in, try_all_starts=False):
     found_subwords += max_found_subwords
     
   return found_subwords
+
+
+def reduce_using_relators(w, R, cyclically=False):
+  """Reduce a word using the relators given.  This assumes a Dehn presentation
+  (it searchs for locations where more than half a relator appears).  If 
+  cyclically=True, it reduces it cyclically."""
+  #make the mapping on words from the relators
+  if type(w) == list:
+    return [reduce_using_relators(W) for W in w]
+  if type(R) == str:
+    R = [R]
+  R_sym = R + inverse(R)
+  LR_sym = map(len, R_sym)
+  bigger_than_half = [(ell/2)+1 for ell in LR_sym]
+  letters_in_relators = letter_index_dict(R_sym)
+  rw = w
+  #print "R_sym: ", R_sym
+  #print "letters_in_relators: ", letters_in_relators
+  while True:
+    #try to find a non-reduced spot
+    Lrw = len(rw)
+    non_reduced_spot = None
+    for i in xrange(Lrw):
+      agreements = letters_in_relators[rw[i]]
+      agreement_len = 1
+      good_agreements = []
+      while len(agreements) > 0:
+        if cyclically==False and i + agreement_len == Lrw:
+          #check if there are any good agreements
+          for a in agreements:
+            if agreement_len >= bigger_than_half[a[0]]:
+              good_agreements.append( (a[0], a[1], i, agreement_len) )
+          break
+        new_agreements = []
+        #print "Agreements: ", agreements, " length: ", agreement_len
+        for a in agreements:
+          if LR_sym[a[0]] == agreement_len or \
+             R_sym[a[0]][(a[1] + agreement_len)%LR_sym[a[0]]] != rw[(i+agreement_len)%Lrw]:
+            #this agreement doesn't continue; if it's long enough, it's good, though
+            if agreement_len >= bigger_than_half[a[0]]:
+              good_agreements.append( (a[0], a[1], i, agreement_len) )
+          else:
+            new_agreements.append(a)
+        agreements = new_agreements
+        agreement_len += 1
+      #print "Good agreeements: ", good_agreements
+      if len(good_agreements) > 0:
+        non_reduced_spot = max(good_agreements, key=lambda x:x[-1])
+        break
+    
+    if non_reduced_spot == None:
+      break
+    #splice in the inverse of the relator
+    ri, rij, rwi, al = non_reduced_spot
+    r_remainder = cyclic_subword( R_sym[ri], rij+al, LR_sym[ri]-al )
+    to_splice = inverse(r_remainder)
+    #print "To splice: ", to_splice
+    if cyclically == True:
+      #rotate so we don't worry about it rolling off the end
+      #our replacement now starts right at the beginning of the word
+      rw = rw[rwi:] + rw[:rwi]
+      rw = to_splice + rw[al:]
+      rw = word_reduce(rw)
+      rw = cyc_red(rw)
+    else:
+      #if it's not cyclically, we don't worry about it running over anyway
+      rw = rw[:rwi] + to_splice + rw[(rwi+al):]
+      rw = word_reduce(rw)
+  
+  return rw
+      
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+

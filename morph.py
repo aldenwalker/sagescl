@@ -1,4 +1,4 @@
-import random
+import random as RAND
 import fractions
 
 from word import *
@@ -282,7 +282,20 @@ def random_automorphism(rank, n=None):
       aut[j] = multiply_words(aut[j], aut[k])
       aut[j.swapcase()] = inverse(aut[j])
   return morph(aut)
+
+
+def random_composition(autos, n):
+  if n==0:
+    return None
+  m = RAND.choice(autos)
+  #print m
+  for i in xrange(n-1):
+    m2 = RAND.choice(autos)
+    #print m2
+    m = m*m2
+  return m
   
+
 def random_automorphism_WH(rank, WH_gens, n=None) :
   gens = alphabet[:rank]
   aut = {}

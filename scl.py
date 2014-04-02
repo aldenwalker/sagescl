@@ -6,6 +6,7 @@ import fractions
 
 from word import *
 from HNN import min_in_orbit
+from sage.all import sage_eval
 import fatgraph
 
 WDIR = './'
@@ -57,7 +58,7 @@ def scl(chain, mode='local', args=[], return_fraction=True, verbose=1):
     dat = mout.split(' ')[-3]
     if dat == 'feasible':
       raise NameError('No feasible solution found')
-    return fractions.Fraction(dat)
+    return sage_eval(dat)
   else:
     dat = mout.split(' ')[-1]
     return eval(dat)
