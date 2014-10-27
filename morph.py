@@ -67,6 +67,9 @@ class morph:
   def __repr__(self):
     return str(self)
 
+  def __call__(self, x):
+    return self.ap(x)
+
   def __eq__(self, other):
     #print "Called with ", self, " and ", other 
     sk = set([x for x in self.rules.keys() if x.islower()])

@@ -45,7 +45,7 @@ def find_extremal_transfer(C_in, max_degree=None, degree_list=None, verbose=1, f
   #get an extremal surface
   PID = os.getpid()
   s = scl.scl(C, 'local', (['-f'] if folded else []) + ['-o', cur_dir + '/temp_extremal_surface' + str(PID) + '.fg'])
-  s = Rational(str(s.numerator)+'/'+str(s.denominator)) #this turns it into a sage thing
+  #s = Rational(str(s.numerator)+'/'+str(s.denominator)) #this turns it into a sage thing
   F = fatgraph.read_file(cur_dir + '/temp_extremal_surface' + str(PID) + '.fg')
   
   if fatgraph_size_bound != None and len(F.V) > fatgraph_size_bound:
