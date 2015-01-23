@@ -1,7 +1,7 @@
 import random as RAND
 import fractions
 
-from word import *
+import word
 
 from sage.all import *
 
@@ -14,7 +14,7 @@ class morph:
       newRules = {}
       for x in self.rules:
         if x.swapcase() not in self.rules:
-          newRules[x.swapcase()] = inverse(self.rules[x])
+          newRules[x.swapcase()] = word.inverse(self.rules[x])
       self.rules.update(newRules)
     else:
       self.rules = {}
@@ -27,7 +27,7 @@ class morph:
       newRules = {}
       for x in self.rules:
         if x.swapcase() not in self.rules:
-          newRules[x.swapcase()] = inverse(self.rules[x])
+          newRules[x.swapcase()] = word.inverse(self.rules[x])
       self.rules.update(newRules)      
         
   def ap(self, L, n=1, marked=False):
@@ -40,9 +40,9 @@ class morph:
       for i in xrange(n):
         lets = list(ans)
         if marked:
-          ans = multiply_words_marked([(self.rules[let] if let != '.' else '.') for let in lets])
+          ans = word.multiply_words_marked([(self.rules[let] if let != '.' else '.') for let in lets])
         else :
-          ans = multiply_words([self.rules[let] for let in lets])
+          ans = word.multiply_words([self.rules[let] for let in lets])
       return ans
       
   def iterate(self, n):
@@ -95,12 +95,12 @@ class morph:
     i=0
     while i < min_len and it[0][i] == it[1][i]:
       i += 1
-    return [it[0][i:], it[1][i:], inverse(it[0][:i]) + it[2]]
+    return [it[0][i:], it[1][i:], word.inverse(it[0][:i]) + it[2]]
     
   def homology_matrix(self):
     rank = len(self.rules)/2
     gens = sorted([x for x in self.rules.keys() if x.islower()])
-    rows = [ [ (self.rules[x].count(y) - self.rules[x].count(inverse(y)))  for x in gens] for y in gens]
+    rows = [ [ (self.rules[x].count(y) - self.rules[x].count(word.inverse(y)))  for x in gens] for y in gens]
     return rows
     
   def fixed_space(self):
@@ -388,21 +388,23 @@ class whiteheadAut(morph):
     self.A = A
     self.a = a
     self.rules = {}
-    for gen in alphabet[:rank] + map(inverse, alphabet[:rank]):
-      if gen == a or gen == inverse(a):
+    for gen in alphabet[:rank] + map(word.inverse, alphabet[:rank]):
+      if gen == a or gen == word.inverse(a):
         self.rules[gen] = gen
-      elif gen in A and inverse(gen) not in A:
+      elif gen in A and word.inverse(gen) not in A:
         self.rules[gen] = gen+a
-      elif gen not in A and inverse(gen) in A:
-        self.rules[gen] = inverse(a)+gen
-      elif gen not in A and inverse(gen) not in A:
+      elif gen not in A and word.inverse(gen) in A:
+        self.rules[gen] = word.inverse(a)+gen
+      elif gen not in A and word.inverse(gen) not in A:
         self.rules[gen] = gen
       else:
-        self.rules[gen] = inverse(a) + gen + a
+        self.rules[gen] =word.inverse(a) + gen + a
 
 
 def WAgen(rank):
-  allGens = alphabet[:rank] + map(inverse, alphabet[:rank])
+  if rank == 0:
+    return
+  allGens = alphabet[:rank] + map(word.inverse, alphabet[:rank])
   LA = len(allGens)
   #first give the identity, then never do it again
   yield whiteheadAut(rank, [], allGens[0])
@@ -424,6 +426,59 @@ def WAgen(rank):
         currentAIndex += 1
       yield whiteheadAut(rank, A, a)
 
+def IAgen(rank):
+  if rank < 3:
+    return
+  gens = alphabet[:rank]
+  semigroup_gens = alphabet[:rank] + map(word.inverse, alphabet[:rank])
+  #inverses:
+  #for i in xrange(rank):
+    #d = dict([(ell, (ell if j!=i else word.inverse(ell))) for j,ell in enumerate(alphabet[:rank])])
+    #yield morph(d)
+  #permutations:
+  #for i in xrange(rank):
+    #for j in xrange(rank):
+      #if j==i:
+        #continue
+      #d = dict([(ell, (alphabet[i] if k==j else (alphabet[j] if k==i else ell))) for k,ell in enumerate(alphabet[:rank])])
+      #yield morph(d)
+  #conjugations
+  for i in xrange(rank):
+    g = alphabet[i]
+    for j in xrange(rank):
+      if j == i:
+        continue
+      d = dict([(ell, (g+ell+word.inverse(g) if k==j else ell)) for k,ell in enumerate(alphabet[:rank])])
+      yield morph(d)
+  #multiply by commutator of other gens
+  #throw in inverse commutators (in the other order) too
+  for i in xrange(rank):
+    g1 = alphabet[i]
+    for j in xrange(rank):
+      if j==i:
+        continue
+      g2 = alphabet[j]
+      c = g1+g2+word.inverse(g1)+word.inverse(g2)
+      for k in xrange(rank):
+        if k == i or k == j:
+          continue
+        d = dict([(ell, (ell+c if m==k else ell)) for m,ell in enumerate(alphabet[:rank])])
+        yield morph(d)
+  
+
+def random_IA(rank, n, IAg=None):
+  if IAg == None:
+    IAg = list(IAgen(rank))
+  ans = morph(dict([(ell,ell) for ell in alphabet[:rank]]))
+  LIAg = len(IAg)
+  for i in xrange(n):
+    gi = RAND.randint(0,LIAg-1)
+    ans = ans*IAg[gi]
+  return ans
+
+
+
+
 # assumes rank of whatever it finds
 def min_in_orbit(c, R=None, m=False):
   #make a copy of c
@@ -433,7 +488,7 @@ def min_in_orbit(c, R=None, m=False):
     C = [x for x in c]
     
   if R == None:
-    rank = chain_rank(c)
+    rank = word.chain_rank(c)
   else:
     rank = R
   
@@ -459,5 +514,35 @@ def min_in_orbit(c, R=None, m=False):
   else:
     return C
 
+def is_minimal_in_orbit(c, R=None, m=False):
+  if isinstance(c, str):
+    C = [c]
+  else:
+    C = c
+  if R == None:
+    rank = word.chain_rank(C)
+  else:
+    rank = R
+  CLen = sum(map(len, C))
+  WA = WAgen(rank)
+  for W in WA:
+    newC = W.ap(C, marked=m)
+    newLen = sum(map(len, newC))
+    if newLen < CLen:
+      return false
+  return true
 
-
+def get_minimal_elements(L, R=None, m=False):
+  M = []
+  WA = list(WAgen(R))
+  for w in L:
+    wL = len(w)
+    minimal = True
+    for W in WA:
+      Ww = W.ap(w,marked=m)
+      if len(Ww) < wL:
+        minimal = False
+        break
+    if minimal:
+      M.append(w)
+  return M

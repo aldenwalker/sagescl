@@ -1,5 +1,5 @@
 import random as RAND
-
+import morph
 import itertools
 
 from sage.all import *
@@ -702,6 +702,25 @@ def is_hom_triv(C_in, rank=None):
       return False
   return True
   
+
+def is_diskbusting(w, rank=None):
+  r = (rank if rank != None else chain_rank(w))
+  WG = whitehead_graph(morph.min_in_orbit(w,rank), rank)
+  return WG.is_connected()
+
+def whitehead_graph(C_in, rank=None):
+  C = ([C_in] if type(C_in) == str else C_in)
+  rank = (rank if rank != None else chain_rank(C))
+  WG = Graph()
+  for i in xrange(rank):
+    WG.add_vertex(alphabet[i])
+    WG.add_vertex(alphabet[i].swapcase())
+  for w in C:
+    wL = len(w)
+    for i in xrange(wL):
+      WG.add_edge( ( w[i].swapcase(), w[(i+1)%wL] ) )
+  return WG
+
     
 def random_reduced_finite_word(n, orders, first=None):
   num_gens = len(orders)
