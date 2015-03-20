@@ -1,5 +1,6 @@
 import random as RAND
 import fractions
+import itertools
 
 import word
 
@@ -78,7 +79,17 @@ class morph:
       return False
     else:
       return not any([self.rules[l] != other.rules[l] for l in sk])
-
+  
+  def is_identity(self):
+    return all([self.rules[g]==g for g in self.rules])
+  
+  def is_conjugation(self):
+    redrules = word.simultaneously_conjugated([self.rules[g] for g in self.rules if g.islower()])
+    if redrules[1] == [g for g in self.rules if g.islower()]:
+      return True
+    else:
+      return False
+  
   def act_on_tripod(self, T):
     it = self.ap(T)
     min_len = min(map(len, it))
@@ -298,6 +309,19 @@ def random_composition(autos, n):
     m = m*m2
   return m
   
+def all_compositions(autos, n, ball=False):
+  if ball:
+    for A in itertools.chain(*[all_compositions(autos, i) for i in xrange(1,n+1)]):
+      yield A
+    return
+  #print "Yielding length ",n
+  T = Tuples(range(len(autos)), n)
+  for t in T:
+    ans = autos[t[0]]
+    for i in xrange(1,n):
+      ans = ans*autos[t[i]]
+    yield ans
+
 
 def random_automorphism_WH(rank, WH_gens, n=None) :
   gens = alphabet[:rank]

@@ -190,8 +190,6 @@ class FISubgroup :
       loops.append(cur_word)
     return (loops[0] if len(loops) == 1 else loops)
   
-  
-  
   def contains(self, w):
     v = 0
     for i in xrange(len(w)):
@@ -203,12 +201,22 @@ class FISubgroup :
         v = self.base_gen_actions[g][v]
     return v == 0
   
+  def does_hom_lift(self, A):
+    if self.gens == None:
+      self.compute_gens()
+    for g in self.gens:
+      if not self.contains(A.ap(self.gens_to_base_group[g])):
+        return False
+    return True
+  
   def hom_from_base_hom(self, A):
     if self.gens == None:
       self.compute_gens()
     new_rules = {}
     for g in self.gens:
       new_rules[g] = A.ap(self.gens_to_base_group[g])
+      if not self.contains(new_rules[g]):
+        return None
       new_rules[g] = self.rewrite_word_from_base_gens(new_rules[g])
     return morph.morph(new_rules)
     
@@ -250,19 +258,27 @@ def cyclic_cover(base_gens, degree):
   return G
     
 
-def all_covers(rank, deg, gens=None, verbose=1):
-    P = Permutations(range(deg)).list()
-    T = Tuples(P, rank)
+def all_covers(rank, deg, gens=None, verbose=1, only_cyclic=False):
     cover_rank = 1+deg*rank-deg
     if gens == None:
       base_gens = word.alphabet[:rank]
     else:
       base_gens = gens
-    for t in T:
-      G = FISubgroup(base_gens, t)
-      if not G.connected:
-        continue
-      yield G
+    if only_cyclic:
+      for which_gen in xrange(rank):
+        actions = [ (range(deg) if i != which_gen else (range(1,deg) + [0])) for i in xrange(rank)]
+        G = FISubgroup(base_gens, actions)
+        if not G.connected:
+          continue
+        yield G
+    else:
+      P = Permutations(range(deg)).list()
+      T = Tuples(P, rank)
+      for t in T:
+        G = FISubgroup(base_gens, t)
+        if not G.connected:
+          continue
+        yield G
 
 
 

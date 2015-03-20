@@ -247,6 +247,9 @@ def inverse(w, marked=False):
 def commutator(x,y):
   return multiply_words([x,y,inverse(x), inverse(y)])
 
+def conjugate(x,y):
+  return multiply_words([y,x,inverse(y)])
+
 def case_notation_single(w):
   if '^' not in w:
     return w
@@ -979,6 +982,30 @@ def random_chain_with_hom_image(n, rank, max_words, hom_image) :
    
 
 
+def simultaneously_conjugated(L):
+  redL = list(L)
+  current_conjugator = ''
+  while True:
+    possible_x = None
+    oldRedL = list(redL)
+    for i,w in enumerate(redL):
+      if w[0] != w[-1].swapcase() and len(w) > 1:
+        return current_conjugator, oldRedL
+      this_x = (set([w[0]]) if len(w)>1 else set([w[0], w[0].swapcase()]))
+      if len(w) > 1:
+        redL[i] = w[1:-1]
+      if possible_x == None:
+        possible_x = this_x
+      else:
+        possible_x = possible_x.intersection(this_x)
+        if len(possible_x.intersection(this_x))==0:
+          return current_conjugator, oldRedL
+    current_conjugator = current_conjugator + possible_x.pop() 
+    oldRedL = list(redL)
+
+
+
+
 def any_equal_pairs(t, inds, signs):
   lets = [(t[inds[i]] if signs[i] > 0 else inverse(t[inds[i]])) for i in xrange(len(inds))]
   if lets[0] == lets[1] or lets[0] == lets[2] or lets[1] == lets[2]:
@@ -1371,11 +1398,81 @@ def reduce_using_relators(w, R, cyclically=False):
   return rw
       
         
+#given any hom triv word, find an expression for it as a product of commutators
+#these commutators will happen to be of the form [x,x^-1t], where x is a 
+#generator and t is a word
+def product_of_commutators(w, check_hom_triv=True):
+  if check_hom_triv and not is_hom_triv(w):
+    return None 
+  if len(w) == 0:
+    return []
+  comms = []
+  while len(w) > 0:
+    #find the last occurence of the inverse of the last letter
+    last_gen = w[-1]
+    last_gen_inverse = last_gen.swapcase()
+    last_gen_inverse_i = w.rfind(last_gen_inverse)
+    t = w[last_gen_inverse_i+1:-1]
+    comms.append( (last_gen_inverse+inverse(t), last_gen) )
+    w = multiply_words( w, commutator(last_gen_inverse+inverse(t), last_gen) )
+  #we need to take the inverse of our collection of commutators
+  #(right now it equals the inverse)
+  comms = [ ( y,x ) for (x,y) in comms ]
+  comms.reverse()
+  return comms
+    
+#this expands the commutator using the identity [x,st] = [x,s]s[x,t]s^{-1}
+#it gives a list of the form [(x1,c1),(x2,c2), ...]
+#where x1 is a pair (a,b) representing the commutator [a,b], such 
+#that [x,y] = c1x1c1^{-1} c2x2c2^{-1} ...
+def expand_commutator(x,y):
+  ans = []
+  current_conjugator = ''
+  for i,s in enumerate(y):
+    ans.append( ( (x,s), current_conjugator) )
+    current_conjugator = current_conjugator+s 
+  return ans
 
 
-
-
-
+# given any hom triv word, find an expression for it in terms 
+# of products of conjugates of simple commutators (single letters, same case)
+def product_of_simple_commutators(w, check_hom_triv=True):
+  if check_hom_triv and not is_hom_triv(w):
+    return []
+  W,C = cyc_red_get_conjugate(w)
+  
+  #first express it as a product of commutators of the form [x,x^-1t]
+  #where x is a generators and t is some word
+  PC = product_of_commutators(W,false)
+  
+  #for each commutator in the list, write it as a product of conjugates 
+  #of simple commutators; this uses the identity
+  # [x,st] = [x,s]s[x,t]s^{-1}
+  comms = [x for c in PC for x in expand_commutator(*c)]
+  
+  #now we need to simplify; first remove any commutators
+  #which are trivial
+  comms = [(x,c) for (x,c) in comms if x[0] != x[1].swapcase()]
+  
+  #now make sure that every commutator is all lower case
+  #i.e. [x,Y] = Y[y,x]y
+  for i,((x1,x2),c) in enumerate(comms):
+    x1u = x1.isupper()
+    x2u = x2.isupper()
+    if not x1u and not x2u:
+      continue
+    elif x1u and x2u:
+      comms[i] = ((x1.swapcase(),x2.swapcase()), c+x1+x2)
+    elif x2u:
+      comms[i] = ((x2.swapcase(),x1), c+x2)
+    elif x1u:
+      comms[i] = ((x2,x1.swapcase()), c+x1)
+  
+  #reduce the conjugators
+  comms = [(x,word_reduce(c)) for (x,c) in comms]
+  
+  return comms
+      
 
 
 
